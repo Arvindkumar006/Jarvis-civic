@@ -1,0 +1,167 @@
+/* ==========================================================================
+   JARVIS CIVIC — DESIGN SYSTEM & VISUAL LANGUAGE
+   "Civic Intelligence Command Interface"
+   ========================================================================== */
+
+:root {
+  /* Surface & Background Palette (Graphite / Warm Off-Black) */
+  --bg-canvas: #090b0e;
+  --bg-surface-1: #0f1217;
+  --bg-surface-2: #151921;
+  --bg-surface-3: #1c212c;
+  --bg-elevated: #222836;
+  
+  /* Hairline Borders & Rules */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --border-accent: rgba(59, 130, 246, 0.4);
+
+  /* Typography Colors */
+  --text-primary: #f3f5f8;
+  --text-secondary: #9aa2b1;
+  --text-muted: #646d7e;
+  --text-dim: #434a58;
+
+  /* State Accent Palette */
+  --civic-blue: #2563eb;
+  --civic-blue-hover: #3b82f6;
+  --civic-blue-glow: rgba(37, 99, 235, 0.25);
+  
+  --civic-cyan: #0ea5e9;
+  --civic-cyan-muted: rgba(14, 165, 233, 0.15);
+  
+  --civic-emerald: #10b981;
+  --civic-emerald-muted: rgba(16, 185, 129, 0.12);
+  
+  --civic-amber: #f59e0b;
+  --civic-amber-muted: rgba(245, 158, 11, 0.12);
+  
+  --civic-rose: #ef4444;
+  --civic-rose-muted: rgba(239, 68, 68, 0.12);
+
+  /* Typography Families */
+  --font-editorial: 'Plus Jakarta Sans', 'Outfit', -apple-system, sans-serif;
+  --font-body: 'Inter', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Radius (Deliberately restrained, architectural, not bubbly) */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Focus & Elevation */
+  --focus-ring: 0 0 0 2px rgba(59, 130, 246, 0.5);
+  --shadow-subtle: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --shadow-elevated: 0 12px 36px rgba(0, 0, 0, 0.6);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* Subtle Architectural Grid Motif */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Accessibility Focus States */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Global Monospace Badges & Labels */
+.technical-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.technical-tag {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-medium);
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Crosshair Decorator */
+.crosshair-corner {
+  position: relative;
+}
+.crosshair-corner::before {
+  content: '+';
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.crosshair-corner::after {
+  content: '+';
+  position: absolute;
+  bottom: -8px;
+  right: -8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+/* Pulse Animation */
+@keyframes signalPulse {
+  0% { transform: scale(0.95); opacity: 0.7; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.7; }
+}
+
+@keyframes radarScan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(1000%); }
+}
+
+/* Respect Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,416 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  position: relative;
+  z-index: 1;
+}
+
+.main-viewport {
+  flex: 1;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 3.5rem;
+}
+
+.report-tab-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.voice-studio-wrapper {
+  max-width: 780px;
+  margin: 0 auto 1.25rem;
+  width: 100%;
+}
+
+.case-created-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  background: var(--bg-surface-1);
+  border: 1px solid var(--civic-emerald);
+  border-radius: var(--radius-xs);
+  padding: 1.15rem 1.35rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
+}
+
+.case-banner-icon {
+  margin-top: 0.15rem;
+}
+
+.case-banner-body {
+  flex: 1;
+}
+
+.case-banner-title {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--civic-emerald);
+  margin-bottom: 0.25rem;
+}
+
+.case-banner-meta {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+.case-id-code {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-primary);
+  background: var(--bg-surface-3);
+  padding: 0.15rem 0.45rem;
+  border-radius: 2px;
+}
+
+.case-banner-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-banner-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-medium);
+  color: var(--text-primary);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-banner-action:hover {
+  border-color: var(--civic-blue-hover);
+  color: var(--civic-blue-hover);
+}
+
+/* Page 02 Intake Header */
+.report-intake-header {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  padding: 1.5rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.intake-prehead {
+  margin-bottom: 0.2rem;
+}
+
+.intake-headline {
+  font-family: var(--font-editorial);
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.intake-subheading {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.intake-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.quick-signals-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.quick-signals-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
+
+.signals-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.quick-signal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quick-signal-btn:hover {
+  background: var(--bg-surface-3);
+  border-color: var(--civic-cyan);
+}
+
+.sig-tag {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--civic-cyan);
+}
+
+.sig-title {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.btn-voice-console-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.85rem;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--civic-blue-hover);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-voice-console-toggle:hover {
+  background: var(--civic-blue);
+  color: #fff;
+}
+
+.btn-voice-console-toggle.active {
+  background: var(--civic-blue);
+  color: #fff;
+}
+
+/* Active Session Flow Spine (Connecting Conversation -> Extraction -> Location) */
+.workspace-session-flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 0.5rem 1.25rem;
+  margin-bottom: 1rem;
+  transition: all 0.3s ease;
+}
+
+.workspace-session-flow.state-analyzing {
+  border-color: rgba(0, 229, 255, 0.35);
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.08);
+}
+
+.workspace-session-flow.state-validated {
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.08);
+}
+
+.flow-stage-node {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.flow-stage-node .node-marker {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: all 0.25s ease;
+}
+
+.workspace-session-flow.state-analyzing .flow-stage-node.center .node-marker {
+  background: var(--civic-cyan);
+  box-shadow: 0 0 8px var(--civic-cyan);
+  animation: pulseDot 1.2s infinite;
+}
+
+.workspace-session-flow.state-validated .flow-stage-node .node-marker {
+  background: var(--civic-emerald);
+  box-shadow: 0 0 6px var(--civic-emerald);
+}
+
+.flow-stage-node .stage-tag {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.workspace-session-flow.state-analyzing .flow-stage-node.center .stage-tag {
+  color: var(--civic-cyan);
+}
+
+.workspace-session-flow.state-validated .flow-stage-node .stage-tag {
+  color: var(--civic-emerald);
+}
+
+.flow-spine-connector {
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 0 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.flow-pulse-beam {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, var(--civic-cyan), transparent);
+  opacity: 0;
+}
+
+.workspace-session-flow.state-analyzing .flow-pulse-beam {
+  opacity: 1;
+  animation: pulseFlowBeam 2s infinite ease-in-out;
+}
+
+@keyframes pulseFlowBeam {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+@media (max-width: 900px) {
+  .workspace-session-flow {
+    display: none;
+  }
+}
+
+/* 3-Zone Command Workspace: Zone 1 (Conversation), Zone 2 (Intelligence HUD), Zone 3 (Live Civic Map) */
+.command-workspace-3zone {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1.05fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.zone-conversation {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.zone-intelligence {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.zone-map {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 4.5rem;
+}
+
+.workspace-map-box {
+  width: 100%;
+}
+
+.track-tab-container,
+.evidence-tab-container {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+/* Footer */
+.app-footer {
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface-1);
+  padding: 1.5rem;
+  margin-top: auto;
+}
+
+.footer-content {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: center;
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.footer-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--civic-blue);
+  border-radius: 50%;
+}
+
+.footer-disclaimer {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  max-width: 680px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1280px) {
+  .command-workspace-3zone {
+    grid-template-columns: 1.2fr 1fr;
+  }
+  .zone-map {
+    grid-column: 1 / -1;
+    position: static;
+  }
+}
+
+@media (max-width: 860px) {
+  .command-workspace-3zone {
+    grid-template-columns: 1fr;
+  }
+  .zone-map {
+    position: static;
+  }
+}
+
+@media (max-width: 640px) {
+  .main-viewport {
+    padding: 1rem 0.75rem 2.5rem;
+  }
+}

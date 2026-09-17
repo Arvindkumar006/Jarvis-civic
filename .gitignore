@@ -27,6 +27,10 @@ htmlcov/
 venv/
 ENV/
 
+# Node / Frontend
+node_modules/
+dist/
+
 # Environment and Secrets (Zero credentials policy)
 .env
 .env.*
