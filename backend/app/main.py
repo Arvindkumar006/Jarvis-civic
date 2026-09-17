@@ -9,6 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config.settings import settings
 from app.api.health import router as health_router
 from app.api.conversation import router as conversation_router
+from app.api.cases import router as cases_router
+from app.api.tracking import router as tracking_router
+from app.api.audit import router as audit_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -33,6 +36,9 @@ app.add_middleware(
 # Register routers
 app.include_router(health_router)
 app.include_router(conversation_router)
+app.include_router(cases_router)
+app.include_router(tracking_router)
+app.include_router(audit_router)
 
 
 @app.get("/")
@@ -42,13 +48,17 @@ def get_root():
         "service": settings.APP_NAME,
         "tagline": settings.APP_TAGLINE,
         "version": settings.APP_VERSION,
-        "phase": "Phase 2 - AWS Strands Agents & Local LLM Provider",
+        "phase": "Phase 3 - Local AWS Cedar Authorization & Policy Enforcement",
         "status": "operational",
         "disclaimer": settings.DISCLAIMER,
         "endpoints": {
             "health": "/api/health",
             "conversation": "/api/conversation",
+            "cases": "/api/cases",
+            "tracking": "/api/tracking",
+            "audit": "/api/audit/logs",
             "docs": "/docs",
             "openapi": "/openapi.json",
         },
     }
+

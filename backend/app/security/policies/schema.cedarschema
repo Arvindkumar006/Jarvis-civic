@@ -1,0 +1,69 @@
+// Cedar Schema for JARVIS Civic (Application-Level Authorization)
+// Defines principals, resources, actions, and attribute constraints.
+
+namespace JarvisCivic {
+    entity Citizen;
+
+    entity AuthorityOfficer {
+        department: String
+    };
+
+    entity MunicipalSupervisor {
+        department: String
+    };
+
+    entity Administrator;
+
+    entity PublicUser;
+
+    entity CivicCase {
+        owner: Citizen,
+        department: String,
+        status: String,
+        is_public: Bool
+    };
+
+    entity AuditRecord {
+        department: String
+    };
+
+    action create_case appliesTo {
+        principal: [Citizen, Administrator],
+        resource: [CivicCase]
+    };
+
+    action read_own_case appliesTo {
+        principal: [Citizen, Administrator],
+        resource: [CivicCase]
+    };
+
+    action update_own_case appliesTo {
+        principal: [Citizen, Administrator],
+        resource: [CivicCase]
+    };
+
+    action read_public_tracking appliesTo {
+        principal: [PublicUser, Citizen, AuthorityOfficer, MunicipalSupervisor, Administrator],
+        resource: [CivicCase]
+    };
+
+    action read_authority_case appliesTo {
+        principal: [AuthorityOfficer, MunicipalSupervisor, Administrator],
+        resource: [CivicCase]
+    };
+
+    action update_case_status appliesTo {
+        principal: [AuthorityOfficer, MunicipalSupervisor, Administrator],
+        resource: [CivicCase]
+    };
+
+    action add_resolution_note appliesTo {
+        principal: [AuthorityOfficer, MunicipalSupervisor, Administrator],
+        resource: [CivicCase]
+    };
+
+    action read_audit_log appliesTo {
+        principal: [MunicipalSupervisor, Administrator],
+        resource: [AuditRecord]
+    };
+}
