@@ -1,0 +1,14 @@
+services:
+  localstack:
+    container_name: jarvis-civic-localstack
+    image: localstack/localstack:3.8.1
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=dynamodb,s3
+      - AWS_DEFAULT_REGION=us-east-1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

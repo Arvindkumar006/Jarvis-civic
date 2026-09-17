@@ -1,0 +1,217 @@
+"""In-Memory Local Fallback Repositories for JARVIS Civic.
+
+Phase 4: Provides zero-dependency, thread-safe local implementations of
+CaseRepository and EvidenceRepository for development, offline environments,
+and fast unit testing.
+"""
+
+from datetime import datetime, timezone
+import os
+import re
+import secrets
+import threading
+from typing import Dict, List, Optional
+
+from fastapi import HTTPException, status
+from app.config.settings import settings
+from app.models.common import generate_case_id
+from app.models.enums import CaseStatus, ControlledDepartment
+from app.models.security import (
+    CivicCaseCreateRequest,
+    CivicCaseRecord,
+    EvidenceMetadata,
+)
+from app.services.persistence.interface import CaseRepository, EvidenceRepository
+
+
+def sanitize_filename(filename: str) -> str:
+    """Sanitize filename to prevent directory traversal or invalid characters."""
+    base = os.path.basename(filename)
+    # Strip any non-alphanumeric chars except dots, dashes, underscores
+    clean = re.sub(r"[^a-zA-Z0-9._-]", "_", base)
+    return clean or "evidence_file"
+
+
+def validate_evidence_file(
+    file_bytes: bytes,
+    filename: str,
+    content_type: str,
+) -> str:
+    """Validate evidence file upload against security constraints."""
+    if not file_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Evidence file cannot be empty",
+        )
+
+    if len(file_bytes) > settings.MAX_EVIDENCE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Evidence file size exceeds maximum limit of {settings.MAX_EVIDENCE_SIZE_BYTES // (1024 * 1024)} MB",
+        )
+
+    clean_name = sanitize_filename(filename)
+    ext = os.path.splitext(clean_name)[1].lower()
+
+    if ext not in settings.ALLOWED_EVIDENCE_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File extension '{ext}' is not permitted for civic evidence",
+        )
+
+    if content_type and content_type.lower() not in settings.ALLOWED_EVIDENCE_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Content-Type '{content_type}' is not permitted for civic evidence",
+        )
+
+    return clean_name
+
+
+class LocalCaseRepository(CaseRepository):
+    """Thread-safe in-memory case repository implementing CaseRepository."""
+
+    def __init__(self):
+        self._cases: Dict[str, CivicCaseRecord] = {}
+        self._lock = threading.Lock()
+
+    def create_case(
+        self,
+        request: CivicCaseCreateRequest,
+        owner_id: str,
+        case_id: Optional[str] = None,
+    ) -> CivicCaseRecord:
+        with self._lock:
+            cid = case_id or generate_case_id()
+            record = CivicCaseRecord(
+                case_id=cid,
+                owner_id=owner_id,
+                department=(
+                    request.department.value
+                    if isinstance(request.department, ControlledDepartment)
+                    else str(request.department)
+                ),
+                status=CaseStatus.DOCKET_CREATED,
+                description=request.description,
+                location=request.location,
+                pincode=request.pincode,
+                is_public=request.is_public,
+                resolution_notes=[],
+                evidence_uris=[],
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+            self._cases[cid] = record
+            return record
+
+    def get_case(self, case_id: str) -> Optional[CivicCaseRecord]:
+        with self._lock:
+            return self._cases.get(case_id)
+
+    def update_case(
+        self,
+        case_id: str,
+        description: Optional[str] = None,
+        location: Optional[str] = None,
+        pincode: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        with self._lock:
+            record = self._cases.get(case_id)
+            if not record:
+                return None
+            if description is not None:
+                record.description = description
+            if location is not None:
+                record.location = location
+            if pincode is not None:
+                record.pincode = pincode
+            record.updated_at = datetime.now(timezone.utc)
+            return record
+
+    def update_case_status(
+        self,
+        case_id: str,
+        new_status: CaseStatus,
+        note: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        with self._lock:
+            record = self._cases.get(case_id)
+            if not record:
+                return None
+            record.status = new_status
+            record.updated_at = datetime.now(timezone.utc)
+            if note:
+                record.resolution_notes.append(note)
+            return record
+
+    def add_resolution_note(self, case_id: str, note: str) -> Optional[CivicCaseRecord]:
+        with self._lock:
+            record = self._cases.get(case_id)
+            if not record:
+                return None
+            record.resolution_notes.append(note)
+            record.updated_at = datetime.now(timezone.utc)
+            return record
+
+    def add_evidence_uri(self, case_id: str, uri: str) -> Optional[CivicCaseRecord]:
+        with self._lock:
+            record = self._cases.get(case_id)
+            if not record:
+                return None
+            if uri not in record.evidence_uris:
+                record.evidence_uris.append(uri)
+            record.updated_at = datetime.now(timezone.utc)
+            return record
+
+    def clear(self) -> None:
+        with self._lock:
+            self._cases.clear()
+
+
+class LocalEvidenceRepository(EvidenceRepository):
+    """Thread-safe in-memory evidence store implementing EvidenceRepository."""
+
+    def __init__(self):
+        self._evidence: Dict[str, bytes] = {}
+        self._metadata: Dict[str, EvidenceMetadata] = {}
+        self._lock = threading.Lock()
+
+    def upload_evidence(
+        self,
+        case_id: str,
+        file_bytes: bytes,
+        filename: str,
+        content_type: str,
+    ) -> EvidenceMetadata:
+        clean_filename = validate_evidence_file(file_bytes, filename, content_type)
+
+        # Server-side generated evidence ID
+        evidence_id = secrets.token_hex(6)
+        object_key = f"cases/{case_id}/evidence/{evidence_id}/{clean_filename}"
+        s3_uri = f"s3://{settings.S3_BUCKET_NAME}/{object_key}"
+
+        meta = EvidenceMetadata(
+            evidence_id=evidence_id,
+            case_id=case_id,
+            object_key=object_key,
+            s3_uri=s3_uri,
+            filename=clean_filename,
+            content_type=content_type,
+            size_bytes=len(file_bytes),
+            uploaded_at=datetime.now(timezone.utc),
+        )
+
+        with self._lock:
+            self._evidence[object_key] = file_bytes
+            self._metadata[f"{case_id}:{evidence_id}"] = meta
+
+        return meta
+
+    def get_evidence_metadata(self, case_id: str, evidence_id: str) -> Optional[EvidenceMetadata]:
+        with self._lock:
+            return self._metadata.get(f"{case_id}:{evidence_id}")
+
+    def clear(self) -> None:
+        with self._lock:
+            self._evidence.clear()
+            self._metadata.clear()

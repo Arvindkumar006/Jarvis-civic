@@ -48,7 +48,7 @@ def get_root():
         "service": settings.APP_NAME,
         "tagline": settings.APP_TAGLINE,
         "version": settings.APP_VERSION,
-        "phase": "Phase 3 - Local AWS Cedar Authorization & Policy Enforcement",
+        "phase": "Phase 4 - Persistence Layer & LocalStack Integration",
         "status": "operational",
         "disclaimer": settings.DISCLAIMER,
         "endpoints": {

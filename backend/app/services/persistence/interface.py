@@ -1,0 +1,89 @@
+"""Abstract Persistence Interfaces for JARVIS Civic.
+
+Phase 4: Decouples business logic and Cedar enforcement from underlying
+storage (LocalStack DynamoDB, LocalStack S3, or In-Memory Local Fallback).
+"""
+
+from abc import ABC, abstractmethod
+from typing import List, Optional
+from app.models.enums import CaseStatus
+from app.models.security import (
+    CivicCaseCreateRequest,
+    CivicCaseRecord,
+    EvidenceMetadata,
+)
+
+
+class CaseRepository(ABC):
+    """Abstract repository contract for CivicCase persistence."""
+
+    @abstractmethod
+    def create_case(
+        self,
+        request: CivicCaseCreateRequest,
+        owner_id: str,
+        case_id: Optional[str] = None,
+    ) -> CivicCaseRecord:
+        """Persist a new civic case record."""
+        pass
+
+    @abstractmethod
+    def get_case(self, case_id: str) -> Optional[CivicCaseRecord]:
+        """Retrieve a civic case by unique case_id."""
+        pass
+
+    @abstractmethod
+    def update_case(
+        self,
+        case_id: str,
+        description: Optional[str] = None,
+        location: Optional[str] = None,
+        pincode: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        """Update problem statement or physical attributes of an existing case."""
+        pass
+
+    @abstractmethod
+    def update_case_status(
+        self,
+        case_id: str,
+        new_status: CaseStatus,
+        note: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        """Update case lifecycle status and append transition note."""
+        pass
+
+    @abstractmethod
+    def add_resolution_note(self, case_id: str, note: str) -> Optional[CivicCaseRecord]:
+        """Append an authority resolution note."""
+        pass
+
+    @abstractmethod
+    def add_evidence_uri(self, case_id: str, uri: str) -> Optional[CivicCaseRecord]:
+        """Associate an uploaded evidence storage URI with the case."""
+        pass
+
+    @abstractmethod
+    def clear(self) -> None:
+        """Clear all stored cases (primarily for test fixture isolation)."""
+        pass
+
+
+class EvidenceRepository(ABC):
+    """Abstract repository contract for Evidence file storage."""
+
+    @abstractmethod
+    def upload_evidence(
+        self,
+        case_id: str,
+        file_bytes: bytes,
+        filename: str,
+        content_type: str,
+    ) -> EvidenceMetadata:
+        """Validate and upload evidence file bytes, returning server-generated metadata."""
+        pass
+
+    @abstractmethod
+    def get_evidence_metadata(self, case_id: str, evidence_id: str) -> Optional[EvidenceMetadata]:
+        """Fetch metadata for an evidence item."""
+        pass

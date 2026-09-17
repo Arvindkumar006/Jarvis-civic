@@ -37,6 +37,7 @@ class CivicAction(str, Enum):
     READ_AUTHORITY_CASE = "read_authority_case"
     UPDATE_CASE_STATUS = "update_case_status"
     ADD_RESOLUTION_NOTE = "add_resolution_note"
+    ADD_EVIDENCE = "add_evidence"
     READ_AUDIT_LOG = "read_audit_log"
 
 
@@ -132,11 +133,29 @@ class CivicCaseRecord(BaseModel):
     status: CaseStatus = CaseStatus.DOCKET_CREATED
     description: str
     location: str
+    landmark: Optional[str] = None
     pincode: Optional[str] = None
+    urgency: Optional[str] = None
+    urgency_rationale: Optional[str] = None
+    session_id: Optional[str] = None
     is_public: bool = True
+    evidence_uris: List[str] = Field(default_factory=list)
     resolution_notes: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class EvidenceMetadata(BaseModel):
+    """Server-side generated metadata for uploaded evidence object."""
+
+    evidence_id: str
+    case_id: str
+    object_key: str
+    s3_uri: str
+    filename: str
+    content_type: str
+    size_bytes: int
+    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class PublicTrackingProjection(BaseModel):
@@ -144,7 +163,7 @@ class PublicTrackingProjection(BaseModel):
 
     CRITICAL SECURITY INVARIANT:
     Must NEVER expose private citizen identifiers, contact details, private notes,
-    or internal authorization metadata to public tracking queries.
+    evidence URIs, or internal authorization metadata to public tracking queries.
     """
 
     case_id: str
@@ -152,3 +171,4 @@ class PublicTrackingProjection(BaseModel):
     recommended_department: str
     created_at: datetime
     updated_at: datetime
+

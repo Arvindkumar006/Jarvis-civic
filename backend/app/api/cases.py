@@ -6,7 +6,7 @@ before performing case operations.
 """
 
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from app.models.enums import CaseStatus
 from app.models.security import (
@@ -16,6 +16,7 @@ from app.models.security import (
     CivicCaseRecord,
     CivicCaseStatusUpdateRequest,
     CivicCaseUpdateRequest,
+    EvidenceMetadata,
     ResolutionNoteRequest,
 )
 from app.security.pep import pep
@@ -109,14 +110,13 @@ def update_case(
         is_public=case.is_public,
     )
 
-    if payload.description is not None:
-        case.description = payload.description
-    if payload.location is not None:
-        case.location = payload.location
-    if payload.pincode is not None:
-        case.pincode = payload.pincode
-
-    return case
+    updated = case_store.update_case(
+        case_id=case_id,
+        description=payload.description,
+        location=payload.location,
+        pincode=payload.pincode,
+    )
+    return updated or case
 
 
 @router.patch("/{case_id}/status", response_model=CivicCaseRecord)
@@ -177,3 +177,56 @@ def add_resolution_note(
 
     updated = case_store.add_resolution_note(case_id=case_id, note=payload.note)
     return updated or case
+
+
+@router.post("/{case_id}/evidence", response_model=EvidenceMetadata, status_code=status.HTTP_201_CREATED)
+async def upload_case_evidence(
+    case_id: str,
+    file: UploadFile = File(...),
+    principal: ApplicationPrincipal = Depends(get_current_principal),
+) -> EvidenceMetadata:
+    """Upload and attach evidence to a civic case.
+
+    CRITICAL SECURITY & EXECUTION ORDER:
+    1. Resolve case record
+    2. Cedar authorization (action: add_evidence)
+    3. ALLOW from Cedar PEP (DENY halts with HTTP 403)
+    4. Validate file (size <= 10MB, non-empty, allowed extension/MIME, sanitize filename)
+    5. Upload to S3 evidence repository
+    6. Attach URI to case record in persistence store
+    """
+    # 1. Resolve case
+    case = case_store.get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+
+    # 2. Enforce Cedar authorization BEFORE any storage action
+    pep.enforce(
+        principal=principal,
+        action=CivicAction.ADD_EVIDENCE,
+        resource_id=case.case_id,
+        resource_type="CivicCase",
+        resource_owner=case.owner_id,
+        resource_department=case.department,
+        resource_status=case.status.value,
+        is_public=case.is_public,
+    )
+
+    # 3. Read and validate file bytes
+    file_bytes = await file.read()
+    filename = file.filename or "evidence_attachment.jpg"
+    content_type = file.content_type or "image/jpeg"
+
+    # 4. Upload to S3 evidence repository
+    metadata = case_store.evidence_repo.upload_evidence(
+        case_id=case_id,
+        file_bytes=file_bytes,
+        filename=filename,
+        content_type=content_type,
+    )
+
+    # 5. Attach URI to case
+    case_store.add_evidence_uri(case_id, metadata.s3_uri)
+
+    return metadata
+

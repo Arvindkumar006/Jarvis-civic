@@ -23,11 +23,15 @@ permit(
 );
 
 // POLICY C — Citizen Ownership
-// Citizens can only read and update cases that they own
+// Citizens can only read, update, and add evidence to cases that they own
 @id("policy_citizen_own_case")
 permit(
     principal is JarvisCivic::Citizen,
-    action in [JarvisCivic::Action::"read_own_case", JarvisCivic::Action::"update_own_case"],
+    action in [
+        JarvisCivic::Action::"read_own_case",
+        JarvisCivic::Action::"update_own_case",
+        JarvisCivic::Action::"add_evidence"
+    ],
     resource
 )
 when {
@@ -35,14 +39,15 @@ when {
 };
 
 // POLICY D — Authority Officer Scope
-// Authority officers can read, update status, and add resolution notes only within their assigned department
+// Authority officers can read, update status, add resolution notes, and attach evidence only within their assigned department
 @id("policy_authority_officer_scope")
 permit(
     principal is JarvisCivic::AuthorityOfficer,
     action in [
         JarvisCivic::Action::"read_authority_case",
         JarvisCivic::Action::"update_case_status",
-        JarvisCivic::Action::"add_resolution_note"
+        JarvisCivic::Action::"add_resolution_note",
+        JarvisCivic::Action::"add_evidence"
     ],
     resource
 )
@@ -51,14 +56,15 @@ when {
 };
 
 // POLICY E — Municipal Supervisor Scope
-// Supervisors can manage cases and inspect audit records within their department scope
+// Supervisors can manage cases, add evidence, and inspect audit records within their department scope
 @id("policy_supervisor_scope")
 permit(
     principal is JarvisCivic::MunicipalSupervisor,
     action in [
         JarvisCivic::Action::"read_authority_case",
         JarvisCivic::Action::"update_case_status",
-        JarvisCivic::Action::"add_resolution_note"
+        JarvisCivic::Action::"add_resolution_note",
+        JarvisCivic::Action::"add_evidence"
     ],
     resource
 )

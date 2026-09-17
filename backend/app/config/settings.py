@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     APP_NAME: str = "JARVIS Civic"
     APP_TAGLINE: str = "Speak. Report. Resolve."
-    APP_VERSION: str = "0.2.0"
+    APP_VERSION: str = "0.4.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     HOST: str = "127.0.0.1"
@@ -23,6 +23,22 @@ class Settings(BaseSettings):
     JARVIS_LLM_MODEL: str = "llama3.2:3b"
     LLM_TIMEOUT_SECONDS: float = 5.0
     FALLBACK_ENABLED: bool = True
+
+    # Persistence & LocalStack Configuration (Local AWS-compatible, zero-cost)
+    PERSISTENCE_BACKEND: str = "local"  # "local" or "localstack"
+    LOCALSTACK_ENDPOINT_URL: str = "http://localhost:4566"
+    DYNAMODB_TABLE_NAME: str = "JarvisCivicCases"
+    S3_BUCKET_NAME: str = "jarvis-civic-evidence"
+    AWS_REGION: str = "us-east-1"
+    AWS_ACCESS_KEY_ID: str = "test"
+    AWS_SECRET_ACCESS_KEY: str = "test"
+    MAX_EVIDENCE_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MB
+    ALLOWED_EVIDENCE_EXTENSIONS: List[str] = [
+        ".jpg", ".jpeg", ".png", ".pdf", ".mp3", ".wav", ".txt"
+    ]
+    ALLOWED_EVIDENCE_MIME_TYPES: List[str] = [
+        "image/jpeg", "image/png", "application/pdf", "audio/mpeg", "audio/wav", "text/plain"
+    ]
 
     # CORS origins
     ALLOWED_ORIGINS: List[str] = [

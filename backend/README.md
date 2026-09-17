@@ -12,13 +12,74 @@ JARVIS Civic employs a multi-phase, local-first architecture designed for the AW
 - **Phase 1 (Completed):** Canonical Data Contracts, Controlled Enums, Pydantic v2 validation models, and core REST scaffolding.
 - **Phase 2 (Completed):** AWS Strands Agents SDK integration, local Ollama model provider abstraction, deterministic fallback reasoning, missing-field detection, and multilingual follow-up composition.
 - **Phase 3 (Completed):** Local AWS Cedar Policy Decision Point (PDP), Policy Enforcement Point (PEP), least-privilege policies (`.cedar` & `.cedarschema`), ownership/scope invariants, and append-only audit event stream.
-- **Phase 4 (Upcoming):** Dual-mode persistence (LocalStack DynamoDB/S3 + SQLite vault) and ReportLab PDF/QR synthesis.
+- **Phase 4 (Completed):** Decoupled persistence abstraction, LocalStack DynamoDB (`JarvisCivicCases`), LocalStack S3 (`jarvis-civic-evidence`), local in-memory fallback, and dedicated `add_evidence` Cedar authorization.
 - **Phase 5 (Upcoming):** React + Vite frontend, Web Audio voice intake, and live Civic Extraction HUD.
 - **Phase 6 (Upcoming):** Authority triage console, Cedar permission badges, and audit log.
 
 ---
 
-## 2. Phase 3: Local AWS Cedar Authorization & PEP Layer
+## 2. Phase 4: Persistence Layer & LocalStack Integration
+
+### Architecture Overview
+Business operations interact with storage strictly through the `CaseRepository` and `EvidenceRepository` persistence abstraction. LocalStack provides a zero-cost, local AWS-compatible environment:
+
+```text
+Application Request
+        ↓
+FastAPI HTTP Route (/api/cases, /api/tracking)
+        ↓
+Policy Enforcement Point (PEP)
+        ↓
+Local AWS Cedar PDP
+        ↓
+ALLOW (Fail-closed on DENY: HTTP 403)
+        ↓
+CaseService / Repository Facade (case_store)
+        ↓
+Persistence Abstraction (CaseRepository, EvidenceRepository)
+        ├── Local Development Fallback (LocalCaseRepository, LocalEvidenceRepository)
+        └── LocalStack AWS Services (DynamoDBCaseRepository, S3EvidenceRepository)
+                ├── DynamoDB: JarvisCivicCases
+                └── S3: jarvis-civic-evidence
+```
+
+> [!IMPORTANT]
+> **Zero Cloud Billing & LocalStack Disclaimer:** LocalStack is used exclusively as a local AWS-compatible development environment (`http://localhost:4566`). No real AWS account, real credentials, or paid AWS services are required.
+
+### DynamoDB Table Schema (`JarvisCivicCases`)
+- **Partition Key:** `case_id` (String, HASH)
+- **Billing Mode:** `PAY_PER_REQUEST`
+- **Data Invariants:**
+  - `pincode`: Guaranteed strict string format (e.g. `"012345"` is never coerced to number).
+  - `status`: Stored as canonical string enum.
+  - `created_at` & `updated_at`: Stored as ISO-8601 UTC strings.
+  - `resolution_notes` & `evidence_uris`: String lists.
+
+### S3 Evidence Storage (`jarvis-civic-evidence`)
+- **Scoped Object Key:** `cases/{case_id}/evidence/{evidence_id}/{sanitized_filename}`
+- **Security Validations:**
+  - Enforces `add_evidence` Cedar policy before any file I/O.
+  - Max file size: 10 MB (`MAX_EVIDENCE_SIZE_BYTES`).
+  - Permitted extensions: `.jpg`, `.jpeg`, `.png`, `.pdf`, `.mp3`, `.wav`, `.txt`.
+  - Non-empty payload verification.
+  - Path traversal protection (sanitizes client-provided filenames).
+  - Server-side generated `evidence_id`.
+
+### Running LocalStack Locally (Optional for LocalStack Backend)
+To run LocalStack via Docker:
+```bash
+docker run -d --name localstack -p 4566:4566 -p 4510-4559:4510-4559 localstack/localstack
+```
+Configure `.env`:
+```env
+PERSISTENCE_BACKEND=localstack
+LOCALSTACK_ENDPOINT_URL=http://localhost:4566
+```
+If LocalStack is not active, JARVIS Civic operates with zero configuration using the in-memory `LocalRepository` (`PERSISTENCE_BACKEND=local`).
+
+---
+
+## 3. Phase 3: Local AWS Cedar Authorization & PEP Layer
 
 ### Architecture Overview
 Protected civic operations pass through a formal Policy Enforcement Point (PEP) which queries the local AWS Cedar Policy Decision Point (PDP):
