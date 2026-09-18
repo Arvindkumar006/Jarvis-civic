@@ -14,6 +14,7 @@ from app.models.enums import (
     CivicIntent,
     ControlledDepartment,
     EvidenceType,
+    LocationSource,
     UrgencyLevel,
 )
 
@@ -54,6 +55,10 @@ class CanonicalCivicState(BaseModel):
         default=None,
         description="Street name, neighborhood, or primary geographic reference",
     )
+    location_text: Optional[str] = Field(
+        default=None,
+        description="Raw textual location representation from user message",
+    )
     landmark: Optional[str] = Field(
         default=None,
         description="Prominent nearby reference landmark (e.g. opposite temple, near water tank)",
@@ -61,6 +66,22 @@ class CanonicalCivicState(BaseModel):
     pincode: Optional[str] = Field(
         default=None,
         description="6-digit Indian postal code (must remain a string)",
+    )
+    latitude: Optional[float] = Field(
+        default=None,
+        ge=-90.0,
+        le=90.0,
+        description="Latitude coordinate when explicitly confirmed or map-selected",
+    )
+    longitude: Optional[float] = Field(
+        default=None,
+        ge=-180.0,
+        le=180.0,
+        description="Longitude coordinate when explicitly confirmed or map-selected",
+    )
+    location_source: LocationSource = Field(
+        default=LocationSource.UNCONFIRMED,
+        description="Origin semantics for location coordinates (TEXT_REFERENCE, MAP_SELECTED, GEOCODED, UNCONFIRMED)",
     )
 
     # Urgency & Risk
@@ -87,6 +108,10 @@ class CanonicalCivicState(BaseModel):
     citizen_language: Optional[str] = Field(
         default=None,
         description="Detected or selected language of the citizen",
+    )
+    language: Optional[str] = Field(
+        default=None,
+        description="Detected or selected language of the citizen (alias for citizen_language)",
     )
     confidence: Optional[float] = Field(
         default=None,

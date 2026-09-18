@@ -69,6 +69,9 @@ class DynamoDBCaseRepository(CaseRepository):
             location=request.location,
             pincode=request.pincode,
             is_public=request.is_public,
+            latitude=request.latitude,
+            longitude=request.longitude,
+            location_source=request.location_source,
             resolution_notes=[],
             evidence_uris=[],
             created_at=now,
@@ -102,33 +105,82 @@ class DynamoDBCaseRepository(CaseRepository):
         record = self.get_case(case_id)
         if not record:
             return []
-        
-        # Build milestones from persistent record state
-        items: List[CaseHistoryItem] = [
-            CaseHistoryItem(
-                status=CaseStatus.DOCKET_CREATED.value,
-                label="Docket Created",
-                timestamp=record.created_at,
-                description="Initial Civic Docket recorded in system",
-                actor_role="CITIZEN",
-                note="Initial Civic Docket Created",
-            )
-        ]
 
-        # If current status is beyond created, reflect intermediate and current
-        if record.status != CaseStatus.DOCKET_CREATED:
-            status_val = record.status.value if isinstance(record.status, CaseStatus) else str(record.status)
-            status_title = status_val.replace("_", " ").title()
+        # Reconstruct durable history from persisted audit events
+        from app.services.persistence.factory import get_audit_repository
+        audit_repo = get_audit_repository()
+        audit_events = audit_repo.get_events_for_case(case_id)
+
+        items: List[CaseHistoryItem] = []
+        seen_statuses = set()
+
+        for ev in audit_events:
+            ev_type = getattr(ev, "event_type", None) or getattr(ev, "action", None)
+            new_st = getattr(ev, "new_status", None)
+
+            if new_st and new_st not in seen_statuses:
+                seen_statuses.add(new_st)
+                st_title = new_st.replace("_", " ").title()
+                items.append(
+                    CaseHistoryItem(
+                        milestone_id=getattr(ev, "event_id", f"ms-{secrets.token_hex(6)}"),
+                        status=new_st,
+                        label=st_title,
+                        timestamp=getattr(ev, "timestamp", record.created_at),
+                        department=record.department,
+                        description=(
+                            "Initial Civic Docket recorded in system"
+                            if new_st == CaseStatus.DOCKET_CREATED.value
+                            else f"Case transitioned to {st_title}"
+                        ),
+                        actor_role=getattr(ev, "principal_role", "CITIZEN"),
+                        note=(getattr(ev, "metadata", {}) or {}).get("note") if getattr(ev, "metadata", None) else None,
+                    )
+                )
+            elif ev_type == "RESOLUTION_NOTE_ADDED":
+                note_text = (getattr(ev, "metadata", {}) or {}).get("note") if getattr(ev, "metadata", None) else None
+                items.append(
+                    CaseHistoryItem(
+                        milestone_id=getattr(ev, "event_id", f"ms-{secrets.token_hex(6)}"),
+                        status=record.status.value if isinstance(record.status, CaseStatus) else str(record.status),
+                        label="Resolution Note Added",
+                        timestamp=getattr(ev, "timestamp", record.updated_at),
+                        department=record.department,
+                        description="Official workflow note appended by authority",
+                        actor_role=getattr(ev, "principal_role", "AUTHORITY_OFFICER"),
+                        note=note_text,
+                    )
+                )
+
+        # Fallback if no audit events exist yet
+        if not items:
             items.append(
                 CaseHistoryItem(
-                    status=status_val,
-                    label=status_title,
-                    timestamp=record.updated_at,
-                    description=f"Case transitioned to {status_title}",
-                    actor_role="AUTHORITY_OFFICER",
-                    note=record.resolution_notes[-1] if record.resolution_notes else None,
+                    milestone_id=f"ms-{secrets.token_hex(6)}",
+                    status=CaseStatus.DOCKET_CREATED.value,
+                    label="Docket Created",
+                    timestamp=record.created_at,
+                    department=record.department,
+                    description="Initial Civic Docket recorded in system",
+                    actor_role="CITIZEN",
+                    note="Initial Civic Docket Created",
                 )
             )
+            if record.status != CaseStatus.DOCKET_CREATED:
+                status_val = record.status.value if isinstance(record.status, CaseStatus) else str(record.status)
+                status_title = status_val.replace("_", " ").title()
+                items.append(
+                    CaseHistoryItem(
+                        milestone_id=f"ms-{secrets.token_hex(6)}",
+                        status=status_val,
+                        label=status_title,
+                        timestamp=record.updated_at,
+                        department=record.department,
+                        description=f"Case transitioned to {status_title}",
+                        actor_role="AUTHORITY_OFFICER",
+                        note=record.resolution_notes[-1] if record.resolution_notes else None,
+                    )
+                )
 
         return items
 

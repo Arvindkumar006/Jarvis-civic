@@ -5,12 +5,15 @@ Enforces Cedar authorization via the Policy Enforcement Point (PEP)
 before performing case operations.
 """
 
-from typing import List, Optional
+from typing import Any, List, Optional, Union
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
+from app.config.settings import settings
 from app.models.enums import CaseStatus, validate_status_transition
 from app.models.security import (
     ApplicationPrincipal,
+    ApplicationRole,
+    AuthorizedCaseHistoryItem,
     CaseHistoryItem,
     CivicAction,
     CivicCaseCreateRequest,
@@ -18,6 +21,7 @@ from app.models.security import (
     CivicCaseStatusUpdateRequest,
     CivicCaseUpdateRequest,
     EvidenceMetadata,
+    PublicCaseHistoryItem,
     ResolutionNoteRequest,
 )
 from app.security.audit import audit_dispatcher
@@ -241,31 +245,34 @@ def add_resolution_note(
     return updated or case
 
 
-@router.get("/{case_id}/history", response_model=List[CaseHistoryItem])
+@router.get("/{case_id}/history", response_model=Union[List[AuthorizedCaseHistoryItem], List[PublicCaseHistoryItem]])
 def get_case_history(
     case_id: str,
     principal: ApplicationPrincipal = Depends(get_current_principal),
-) -> List[CaseHistoryItem]:
+) -> Any:
     """Retrieve sanitized lifecycle history for a case.
 
     Protected:
-    - Public cases accessible via read_public_tracking.
-    - Citizens accessible for their own cases.
-    - Authorities/Supervisors/Admins accessible for assigned department cases.
+    - Public: receives PublicCaseHistoryItem (actor_role, note, department, internal fields stripped).
+    - Citizen: evaluated under read_own_case (must be owner); receives PublicCaseHistoryItem (clean citizen-safe milestones).
+    - Authorities/Supervisors/Admins: evaluated under read_authority_case; receives AuthorizedCaseHistoryItem.
     """
     case = case_store.get_case(case_id)
     if not case:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
-    action = (
-        CivicAction.READ_PUBLIC_TRACKING
-        if case.is_public
-        else (
-            CivicAction.READ_OWN_CASE
-            if principal.role.value == "CITIZEN"
-            else CivicAction.READ_AUTHORITY_CASE
-        )
+    is_authority_user = principal.role in (
+        ApplicationRole.AUTHORITY_OFFICER,
+        ApplicationRole.MUNICIPAL_SUPERVISOR,
+        ApplicationRole.ADMINISTRATOR,
     )
+
+    if is_authority_user:
+        action = CivicAction.READ_AUTHORITY_CASE
+    elif principal.role == ApplicationRole.CITIZEN:
+        action = CivicAction.READ_OWN_CASE
+    else:
+        action = CivicAction.READ_PUBLIC_TRACKING
 
     pep.enforce(
         principal=principal,
@@ -278,7 +285,34 @@ def get_case_history(
         is_public=case.is_public,
     )
 
-    return case_store.get_case_history(case_id)
+    raw_history = case_store.get_case_history(case_id)
+
+    if is_authority_user:
+        return [
+            AuthorizedCaseHistoryItem(
+                milestone_id=h.milestone_id,
+                status=h.status,
+                label=h.label,
+                timestamp=h.timestamp,
+                department=h.department,
+                description=h.description,
+                actor_role=h.actor_role,
+                note=h.note,
+            )
+            for h in raw_history
+        ]
+
+    # Public or Citizen: Strictly PublicCaseHistoryItem projection
+    return [
+        PublicCaseHistoryItem(
+            milestone_id=h.milestone_id,
+            status=h.status,
+            label=h.label,
+            timestamp=h.timestamp,
+            description=h.description,
+        )
+        for h in raw_history
+    ]
 
 
 @router.post("/{case_id}/evidence", response_model=EvidenceMetadata, status_code=status.HTTP_201_CREATED)
@@ -293,10 +327,11 @@ async def upload_case_evidence(
     1. Resolve case record
     2. Cedar authorization (action: add_evidence)
     3. ALLOW from Cedar PEP (DENY halts with HTTP 403)
-    4. Validate file (size <= 10MB, non-empty, allowed extension/MIME, sanitize filename)
-    5. Upload to S3 evidence repository
-    6. Attach URI to case record in persistence store
-    7. Record append-only audit event
+    4. Bounded streaming read (reject oversized uploads before buffering arbitrary data in memory)
+    5. Validate file (size <= 10MB, non-empty, allowed extension/MIME, magic byte signatures, sanitize filename)
+    6. Upload to S3 evidence repository
+    7. Attach URI to case record in persistence store
+    8. Record append-only audit event
     """
     # 1. Resolve case
     case = case_store.get_case(case_id)
@@ -315,12 +350,29 @@ async def upload_case_evidence(
         is_public=case.is_public,
     )
 
-    # 3. Read and validate file bytes
-    file_bytes = await file.read()
+    # 3. Bounded streaming read (reject oversized uploads before buffering arbitrary data in memory)
+    max_bytes = settings.MAX_EVIDENCE_SIZE_BYTES
+    chunk_size = 1024 * 1024  # 1MB chunks
+    chunks = []
+    total_read = 0
+
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        total_read += len(chunk)
+        if total_read > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=f"Evidence file size exceeds maximum limit of {max_bytes // (1024 * 1024)} MB",
+            )
+        chunks.append(chunk)
+
+    file_bytes = b"".join(chunks)
     filename = file.filename or "evidence_attachment.jpg"
     content_type = file.content_type or "image/jpeg"
 
-    # 4. Upload to S3 evidence repository
+    # 4. Upload to S3 evidence repository (includes magic byte and extension validation)
     metadata = case_store.evidence_repo.upload_evidence(
         case_id=case_id,
         file_bytes=file_bytes,

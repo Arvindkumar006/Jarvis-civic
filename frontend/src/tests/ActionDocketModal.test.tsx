@@ -1,11 +1,11 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { ActionDocketModal } from '../components/Docket/ActionDocketModal';
-import { CanonicalCivicState, ControlledDepartment, UrgencyLevel } from '../types/civic';
+import { CanonicalCivicState, CivicIntent, ControlledDepartment, UrgencyLevel } from '../types/civic';
 
 describe('ActionDocketModal', () => {
   const mockState: CanonicalCivicState = {
-    intent: 'WATERLOGGING_DRAINAGE_DEFECT',
+    intent: CivicIntent.WATERLOGGING,
     department: ControlledDepartment.DRAINAGE_STORMWATER,
     location: 'Anna Salai, Chennai',
     landmark: 'Thousand Lights Metro',

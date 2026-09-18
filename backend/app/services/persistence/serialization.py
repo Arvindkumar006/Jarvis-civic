@@ -52,6 +52,15 @@ def case_record_to_dynamodb(record: CivicCaseRecord) -> Dict[str, Any]:
     if record.session_id is not None:
         item["session_id"] = str(record.session_id)
 
+    if record.latitude is not None:
+        item["latitude"] = str(record.latitude)
+
+    if record.longitude is not None:
+        item["longitude"] = str(record.longitude)
+
+    if record.location_source is not None:
+        item["location_source"] = str(record.location_source)
+
     return item
 
 
@@ -91,6 +100,12 @@ def dynamodb_to_case_record(item: Dict[str, Any]) -> CivicCaseRecord:
     pincode_val = item.get("pincode")
     pincode_str = str(pincode_val).strip() if pincode_val is not None else None
 
+    # Parse coordinates
+    lat_val = item.get("latitude")
+    lat_float = float(lat_val) if lat_val is not None else None
+    lng_val = item.get("longitude")
+    lng_float = float(lng_val) if lng_val is not None else None
+
     return CivicCaseRecord(
         case_id=item["case_id"],
         owner_id=item["owner_id"],
@@ -104,6 +119,9 @@ def dynamodb_to_case_record(item: Dict[str, Any]) -> CivicCaseRecord:
         urgency_rationale=item.get("urgency_rationale"),
         session_id=item.get("session_id"),
         is_public=bool(item.get("is_public", True)),
+        latitude=lat_float,
+        longitude=lng_float,
+        location_source=item.get("location_source"),
         resolution_notes=list(item.get("resolution_notes") or []),
         evidence_uris=list(item.get("evidence_uris") or []),
         created_at=created_at,

@@ -17,10 +17,11 @@ from app.models.security import (
     ApplicationRole,
     CivicAction,
 )
-from app.security.audit import AuditEvent, audit_dispatcher
+from app.security.audit import AuditEvent
 from app.security.pep import pep
 from app.security.principals import get_current_principal
 from app.services.case_store import case_store
+from app.services.persistence.factory import get_audit_repository
 
 router = APIRouter(prefix="/api/audit", tags=["Security Audit"])
 
@@ -42,12 +43,13 @@ def get_audit_logs(
         resource_department=principal.department,
     )
 
+    audit_repo = get_audit_repository()
     # Supervisor only receives records matching department
     if principal.role == ApplicationRole.MUNICIPAL_SUPERVISOR:
-        return audit_dispatcher.get_events(department=principal.department)
+        return audit_repo.get_events(department=principal.department)
 
     # Administrator receives all records
-    return audit_dispatcher.get_events()
+    return audit_repo.get_events()
 
 
 @router.get("/cases/{case_id}", response_model=List[AuditEvent])
@@ -83,4 +85,5 @@ def get_case_audit_trail(
                 detail="Department scope mismatch for supervisor audit access",
             )
 
-    return audit_dispatcher.get_events_for_case(case_id)
+    audit_repo = get_audit_repository()
+    return audit_repo.get_events_for_case(case_id)

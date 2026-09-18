@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { ExtractionHUD } from '../components/HUD/ExtractionHUD';
-import { CanonicalCivicState, ControlledDepartment, UrgencyLevel } from '../types/civic';
+import { CanonicalCivicState, CivicIntent, ControlledDepartment, UrgencyLevel } from '../types/civic';
 
 describe('ExtractionHUD', () => {
   it('renders initial waiting state when state is null', () => {
@@ -15,7 +15,7 @@ describe('ExtractionHUD', () => {
   it('renders extracted civic parameters and missing field checklist', () => {
     const onOpen = vi.fn();
     const partialState: CanonicalCivicState = {
-      intent: 'WATERLOGGING_DRAINAGE_DEFECT',
+      intent: CivicIntent.WATERLOGGING,
       department: ControlledDepartment.DRAINAGE_STORMWATER,
       location: 'Anna Salai',
       landmark: null,
@@ -47,8 +47,8 @@ describe('ExtractionHUD', () => {
   it('enables docket review button when ready for action', () => {
     const onOpen = vi.fn();
     const completeState: CanonicalCivicState = {
-      intent: 'POTHOLE_ROAD_HAZARD',
-      department: ControlledDepartment.ROADS_BRIDGES,
+      intent: CivicIntent.ROAD_POTHOLE,
+      department: ControlledDepartment.PWD_ROADS,
       location: 'MG Road, Bangalore',
       landmark: 'Near Railway Station',
       pincode: '560001',

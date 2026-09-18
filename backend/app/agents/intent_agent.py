@@ -176,7 +176,7 @@ class RequirementIntentAgent:
         is_greeting = (
             len(clean_msg) < 4
             or clean_msg in common_greetings
-            or (words and all(w in ["hello", "hi", "hey", "good", "morning", "evening", "afternoon", "how", "are", "you", "there"] for w in words))
+            or (words and all(w in ["hello", "hi", "hey", "good", "morning", "evening", "afternoon", "how", "are", "you", "there", "hope", "having", "a", "nice", "day", "thanks", "thank"] for w in words))
         )
         if is_greeting:
             return IntentAnalysis(

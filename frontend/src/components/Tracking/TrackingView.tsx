@@ -47,7 +47,7 @@ interface JourneyStep {
 }
 
 const CANONICAL_JOURNEY: JourneyStep[] = [
-  { step: 1, label: 'Docket Created', code: CaseStatus.DOCKET_CREATED, desc: 'Civic grievance verified and structured into record.' },
+  { step: 1, label: 'Docket Created', code: CaseStatus.DOCKET_CREATED, desc: 'Civic grievance synthesized and structured into record.' },
   { step: 2, label: 'Routing Prepared', code: CaseStatus.ROUTING_PREPARED, desc: 'Routing prepared for the recommended department.' },
   { step: 3, label: 'Submission Ready', code: CaseStatus.SUBMISSION_READY, desc: 'Prepared for potential authority intake.' },
   { step: 4, label: 'Under Review', code: CaseStatus.UNDER_REVIEW, desc: 'Authority review and triage stage.' },
@@ -424,7 +424,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
           <div className="simulation-top-row">
             <div className="simulation-badge">
               <Sliders size={12} />
-              <span>SIMULATION / TEST MODE</span>
+              <span>SIMULATED AUTHORITY CONTEXT</span>
             </div>
             <span className="simulation-notice">
               Frontend actor controls are for local testing only. Server-side Cedar PEP determines authoritative authorization.
@@ -458,10 +458,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                 >
                   <option value={ControlledDepartment.DRAINAGE_STORMWATER}>DRAINAGE_STORMWATER</option>
                   <option value={ControlledDepartment.PWD_ROADS}>PWD_ROADS</option>
-                  <option value={ControlledDepartment.ELECTRICAL_LIGHTING}>ELECTRICAL_LIGHTING</option>
-                  <option value={ControlledDepartment.SOLID_WASTE}>SOLID_WASTE</option>
-                  <option value={ControlledDepartment.TRAFFIC_POLICE}>TRAFFIC_POLICE</option>
-                  <option value={ControlledDepartment.MUNICIPAL_ADMIN}>MUNICIPAL_ADMIN</option>
+                  <option value={ControlledDepartment.MUNICIPAL_CORPORATION}>MUNICIPAL_CORPORATION</option>
+                  <option value={ControlledDepartment.WASTE_MANAGEMENT}>WASTE_MANAGEMENT</option>
+                  <option value={ControlledDepartment.WATER_SUPPLY}>WATER_SUPPLY</option>
+                  <option value={ControlledDepartment.ELECTRICITY_UTILITY}>ELECTRICITY_UTILITY</option>
+                  <option value={ControlledDepartment.OTHER_MANUAL_REVIEW}>OTHER_MANUAL_REVIEW</option>
                 </select>
               </div>
             )}
@@ -826,7 +827,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                   <div className="case-spatial-note">
                     <span className="note-icon">ℹ</span>
                     <span>
-                      Public tracking projections disclose verified departmental routing and sanitized timestamps.
+                      Public tracking projections disclose recommended departmental routing and sanitized timestamps.
                       Exact physical GPS coordinates are withheld from unauthenticated queries to protect citizen privacy.
                     </span>
                   </div>
@@ -976,7 +977,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                     {caseHistory.map((item) => (
                       <div key={item.milestone_id} className="resolution-record-item" style={{ borderLeftColor: 'var(--civic-cyan)' }}>
                         <div className="resolution-meta-row">
-                          <span style={{ color: 'var(--civic-cyan)' }}>{item.stage}</span>
+                          <span style={{ color: 'var(--civic-cyan)' }}>{item.stage || item.status.replace(/_/g, ' ')}</span>
                           <span>{new Date(item.timestamp).toLocaleString()}</span>
                         </div>
                         <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>{item.label}</div>

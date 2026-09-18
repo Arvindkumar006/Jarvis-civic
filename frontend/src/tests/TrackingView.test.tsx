@@ -64,11 +64,10 @@ describe('TrackingView', () => {
     vi.mocked(casesApi.getHistory).mockResolvedValue([
       {
         milestone_id: 'm1',
-        stage: '01_DOCKET_CREATED',
+        status: CaseStatus.DOCKET_CREATED,
         label: 'Docket Created',
         timestamp: '2026-09-17T10:00:00Z',
         description: 'Civic grievance registered into system',
-        notes_count: 0,
       },
     ]);
   });
@@ -132,7 +131,7 @@ describe('TrackingView', () => {
     fireEvent.click(authorityTab);
 
     // Verify simulation banner & next stage transition panel
-    expect(screen.getByText(/SIMULATION \/ TEST MODE/i)).toBeInTheDocument();
+    expect(screen.getByText(/SIMULATED AUTHORITY CONTEXT/i)).toBeInTheDocument();
     expect(screen.getByText(/CANONICAL LIFECYCLE PROGRESSION/i)).toBeInTheDocument();
     expect(screen.getAllByText(/PREPARE ROUTING/i).length).toBeGreaterThanOrEqual(1);
   });

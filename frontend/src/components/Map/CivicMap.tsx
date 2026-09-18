@@ -92,13 +92,13 @@ export const KNOWN_CIVIC_COORDINATES: Record<string, [number, number]> = {
 
 export const getApproxCoordinates = (locationText?: string | null): [number, number] | null => {
   if (!locationText) return null;
-  const lower = locationText.toLowerCase();
+  const lower = locationText.toLowerCase().trim();
   for (const [key, coords] of Object.entries(KNOWN_CIVIC_COORDINATES)) {
-    if (lower.includes(key)) {
+    if (key !== 'default' && lower.includes(key)) {
       return coords;
     }
   }
-  return KNOWN_CIVIC_COORDINATES.default;
+  return null;
 };
 
 export const CivicMap: React.FC<CivicMapProps> = ({
@@ -243,7 +243,6 @@ export const CivicMap: React.FC<CivicMapProps> = ({
       if (coords) {
         try {
           mapInstanceRef.current.setView(coords, zoom, { animate: true });
-          setSelectedCoords(coords);
         } catch {
           // ignore in jsdom
         }

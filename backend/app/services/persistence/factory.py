@@ -9,7 +9,7 @@ Supported modes:
 """
 
 import logging
-from typing import Tuple
+from typing import Optional, Tuple
 from app.config.settings import settings
 from app.security.audit import audit_dispatcher
 from app.services.persistence.interface import (
@@ -61,8 +61,12 @@ def get_repositories() -> Tuple[CaseRepository, EvidenceRepository]:
     return _local_case_repo, _local_evidence_repo
 
 
+_dynamo_audit_repo: Optional[DynamoDBAuditRepository] = None
+
+
 def get_audit_repository() -> AuditRepository:
     """Resolve and return active AuditRepository."""
+    global _dynamo_audit_repo
     backend_mode = settings.PERSISTENCE_BACKEND.lower().strip()
 
     if backend_mode == "localstack":
@@ -72,8 +76,9 @@ def get_audit_repository() -> AuditRepository:
                 f"LocalStack persistence explicitly configured ('{backend_mode}') "
                 f"but endpoint at '{settings.LOCALSTACK_ENDPOINT_URL}' is unreachable."
             )
-        repo = DynamoDBAuditRepository()
-        audit_dispatcher.register_listener(repo.record_event)
-        return repo
+        if _dynamo_audit_repo is None:
+            _dynamo_audit_repo = DynamoDBAuditRepository()
+            audit_dispatcher.register_listener(_dynamo_audit_repo.record_event)
+        return _dynamo_audit_repo
 
     return _local_audit_repo

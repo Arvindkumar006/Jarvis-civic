@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { App } from '../App';
 import { healthApi, conversationApi } from '../services/api';
+import { CivicIntent } from '../types/civic';
 
 vi.mock('../services/api', () => ({
   healthApi: {
@@ -60,7 +61,7 @@ describe('App', () => {
     vi.mocked(conversationApi.intake).mockResolvedValueOnce({
       reply: 'I have logged the waterlogging report at Anna Salai. Is this near the Thousand Lights metro?',
       state: {
-        intent: 'WATERLOGGING_DRAINAGE_DEFECT',
+        intent: CivicIntent.WATERLOGGING,
         department: 'DRAINAGE_STORMWATER' as any,
         location: 'Anna Salai',
         landmark: null,
@@ -70,8 +71,9 @@ describe('App', () => {
         language: 'en-IN',
         confidence: 0.95,
         description: 'Severe waterlogging at Anna Salai',
+        missing_fields: ['landmark', 'pincode'],
       },
-      missing_fields: ['landmark', 'pincode'],
+      session_id: 'test-session',
     });
 
     render(<App />);

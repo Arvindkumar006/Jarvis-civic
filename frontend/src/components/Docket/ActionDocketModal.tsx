@@ -45,6 +45,9 @@ export const ActionDocketModal: React.FC<ActionDocketModalProps> = ({
         department: state.department || ControlledDepartment.DRAINAGE_STORMWATER,
         pincode: state.pincode || null,
         is_public: true,
+        latitude: state.latitude || null,
+        longitude: state.longitude || null,
+        location_source: state.location_source || null,
       };
 
       await onSubmitCase(payload);
@@ -114,7 +117,7 @@ export const ActionDocketModal: React.FC<ActionDocketModalProps> = ({
               <div className="record-cell">
                 <span className="record-key">CONFIDENCE LEVEL</span>
                 <div className="record-val">
-                  {Math.round((state.confidence || 0.9) * 100)}% Verified
+                  {Math.round((state.confidence || 0.9) * 100)}% AI Confidence
                 </div>
               </div>
             </div>

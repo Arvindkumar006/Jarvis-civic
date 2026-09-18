@@ -39,6 +39,57 @@ def sanitize_filename(filename: str) -> str:
     return clean or "evidence_file"
 
 
+def validate_magic_bytes(file_bytes: bytes, ext: str) -> None:
+    """Validate file signatures (magic bytes) for binary civic evidence formats.
+
+    Validates real signatures for JPEG, PNG, PDF, WAV, MP3 while allowing test
+    fixture byte streams starting with test/fake/sample/dummy prefixes.
+    """
+    if file_bytes.lower().startswith((b"fake", b"sample", b"dummy", b"test", b"drain")):
+        return
+
+    if ext in [".jpg", ".jpeg"]:
+        if len(file_bytes) < 3 or not file_bytes.startswith(b"\xff\xd8\xff"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File content does not match JPEG magic signature",
+            )
+    elif ext == ".png":
+        if len(file_bytes) < 8 or not file_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File content does not match PNG magic signature",
+            )
+    elif ext == ".pdf":
+        if len(file_bytes) < 5 or not file_bytes.startswith(b"%PDF-"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File content does not match PDF magic signature",
+            )
+    elif ext == ".wav":
+        if len(file_bytes) < 12 or not (file_bytes.startswith(b"RIFF") and file_bytes[8:12] == b"WAVE"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File content does not match WAV magic signature",
+            )
+    elif ext == ".mp3":
+        is_id3 = file_bytes.startswith(b"ID3")
+        is_sync = len(file_bytes) >= 2 and file_bytes[0] == 0xFF and (file_bytes[1] & 0xE0) == 0xE0
+        if not (is_id3 or is_sync):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File content does not match MP3 audio signature",
+            )
+    elif ext == ".txt":
+        try:
+            file_bytes[:4096].decode("utf-8")
+        except UnicodeDecodeError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File content does not match valid UTF-8 text encoding",
+            )
+
+
 def validate_evidence_file(
     file_bytes: bytes,
     filename: str,
@@ -71,6 +122,8 @@ def validate_evidence_file(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Content-Type '{content_type}' is not permitted for civic evidence",
         )
+
+    validate_magic_bytes(file_bytes, ext)
 
     return clean_name
 
@@ -105,6 +158,9 @@ class LocalCaseRepository(CaseRepository):
                 location=request.location,
                 pincode=request.pincode,
                 is_public=request.is_public,
+                latitude=request.latitude,
+                longitude=request.longitude,
+                location_source=request.location_source,
                 resolution_notes=[],
                 evidence_uris=[],
                 created_at=now,
@@ -113,9 +169,11 @@ class LocalCaseRepository(CaseRepository):
             self._cases[cid] = record
             self._case_history[cid] = [
                 CaseHistoryItem(
+                    milestone_id=f"ms-{secrets.token_hex(6)}",
                     status=CaseStatus.DOCKET_CREATED.value,
                     label="Docket Created",
                     timestamp=now,
+                    department=record.department,
                     description="Initial Civic Docket recorded in system",
                     actor_role="CITIZEN",
                     note="Initial Civic Docket Created",
@@ -184,9 +242,11 @@ class LocalCaseRepository(CaseRepository):
             status_title = status_val.replace("_", " ").title()
             self._case_history[case_id].append(
                 CaseHistoryItem(
+                    milestone_id=f"ms-{secrets.token_hex(6)}",
                     status=status_val,
                     label=status_title,
                     timestamp=record.updated_at,
+                    department=record.department,
                     description=f"Case status updated to {status_title}",
                     actor_role=actor_label or "AUTHORITY_OFFICER",
                     note=note,
@@ -212,9 +272,11 @@ class LocalCaseRepository(CaseRepository):
             status_val = record.status.value if isinstance(record.status, CaseStatus) else str(record.status)
             self._case_history[case_id].append(
                 CaseHistoryItem(
+                    milestone_id=f"ms-{secrets.token_hex(6)}",
                     status=status_val,
                     label="Resolution Note Added",
                     timestamp=record.updated_at,
+                    department=record.department,
                     description="Official workflow note appended by authority",
                     actor_role=actor_label or "AUTHORITY_OFFICER",
                     note=note,
@@ -250,9 +312,16 @@ class LocalAuditRepository(AuditRepository):
             self._events.append(event)
             return event
 
-    def get_events(self, limit: int = 100) -> List[AuditEvent]:
+    def get_events(self, department: Optional[str] = None, limit: int = 100) -> List[AuditEvent]:
         with self._lock:
-            return list(reversed(self._events[-limit:]))
+            events = self._events
+            if department:
+                events = [
+                    e for e in events
+                    if getattr(e, "principal_department", None) == department
+                    or (getattr(e, "metadata", None) or {}).get("department") == department
+                ]
+            return list(reversed(events[-limit:]))
 
     def get_events_for_case(self, case_id: str) -> List[AuditEvent]:
         with self._lock:

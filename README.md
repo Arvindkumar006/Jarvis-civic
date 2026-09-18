@@ -18,43 +18,66 @@ System Classification: Prototype civic decision-support and workflow system (Non
 
 ## Architectural Principles
 
-1. **Zero-Billing & Local-First:** Runs 100% locally with zero requirement for AWS cloud accounts, IAM credentials, credit cards, or billable third-party API endpoints.
+1. **No Paid Cloud Backend Required:** Core application services run locally with zero requirement for billable third-party API endpoints or AWS production credentials.
 2. **Canonical Data Contracts (Phase 1):** Controlled civic taxonomies, strict schema enforcement, and explicit support for conversational incomplete states.
-3. **Multi-Agent Orchestration (Phase 2):** AWS Strands Agents SDK integration with specialized agents (Intent Analyzer, Information Extractor, Urgency Classifier, Clarification Agent) and resilient local fallback.
-4. **AWS Cedar Authorization (Phase 3):** Formal role-based policy decoupling ensuring verifiable security invariants.
-5. **Dual-Mode Persistence (Phase 4):** LocalStack (DynamoDB + S3) with automatic zero-setup SQLite fallback.
-6. **GovTech Obsidian & Emerald UI (Phase 5):** Tactile dark-mode glassmorphism, dynamic Web Audio soundwave intake, and live Civic Extraction HUD.
+3. **Multi-Agent Orchestration (Phase 2):** AWS Strands Agents SDK integration with specialized agent coordination, deterministic trust boundaries, and resilient fallback.
+4. **AWS Cedar Authorization (Phase 3):** Formal role-based policy decoupling ensuring verifiable security invariants and principal boundaries.
+5. **Dual-Mode Persistence (Phase 4):** LocalStack (DynamoDB + S3) with thread-safe in-memory local persistence fallback.
+6. **GovTech Obsidian & Emerald UI (Phase 5):** Tactile dark-mode glassmorphism, responsive Web Speech API voice intake with manual text fallback, and live Civic Extraction HUD.
+7. **Authority Workflow & Audit Trail (Phase 6):** Deterministic 5-stage lifecycle state machine with persistent Cedar-governed audit trail.
+8. **Production Hardening & Remediation (Phase 7 & Remediation):** Multi-turn session persistence, magic byte & bounded upload validation, public history projection privacy, and durable audit recovery.
 
 ---
 
-## Implementation Progress
+## Implementation Progress & Verified Git History
 
-- ✅ **Phase 1: Foundation & Data Contracts** (16/16 tests passing)
-- ✅ **Phase 2: AWS Strands Agents & Local LLM Provider** (39/39 tests passing)
-- ✅ **Phase 3: AWS Cedar Policy Engine & Security** (80/80 tests passing)
-- ✅ **Phase 4: Persistence Layer & LocalStack Integration** (101/101 tests passing)
-- ⏳ **Phase 5: Award-Winning Frontend & Voice Studio**
-- ⏳ **Phase 6: Authority Workflow & Audit Trail**
-- ⏳ **Phase 7: Hardening & Polish**
+- ✅ **Phase 1: Foundation & Data Contracts** (`f050c38`)
+- ✅ **Phase 2: AWS Strands Agents & Local LLM Provider** (`2242ddb`)
+- ✅ **Phase 3: AWS Cedar Policy Engine & Security** (`64b78c8`)
+- ✅ **Phase 4: Persistence Layer & LocalStack Integration** (`f2e0df9`)
+- ✅ **Phase 5: Award-Winning Frontend & Voice Studio** (`fa72eb2`)
+- ✅ **Phase 6: Authority Workflow & Audit Trail** (`f52c8d7`)
+- ✅ **Phase 7: Security Hardening & Live LocalStack Verification** (`fbc84a3`)
 
 ---
 
-## Quick Start (Phase 1 & Phase 2)
+## Quick Start
 
-### 1. Install Dependencies
+### 1. Backend Setup & Dependencies
 ```bash
-pip install -r backend/requirements.txt
+cd backend
+pip install -r requirements.txt
 ```
 
 ### 2. Run Test Suite
 ```bash
-$env:PYTHONPATH="backend"; python -m pytest -v backend/tests
+# Backend pytest suite (including live LocalStack verification if container running)
+pytest -v tests
+
+# Frontend test suite
+cd ../frontend
+npm install
+npx vitest run
+npm run build
+npm run typecheck
 ```
 
 ### 3. Start Backend Server
 ```bash
-$env:PYTHONPATH="backend"; python -m uvicorn app.main:app --reload --port 8000
+cd backend
+python -m uvicorn app.main:app --reload --port 8000
 ```
-- API Health: [http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health)
+- API Liveness: [http://127.0.0.1:8000/health/live](http://127.0.0.1:8000/health/live)
+- API Readiness: [http://127.0.0.1:8000/health/ready](http://127.0.0.1:8000/health/ready)
 - API Documentation: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - Citizen Intake Endpoint: `POST http://127.0.0.1:8000/api/conversation`
+
+---
+
+## Documented System Limitations
+
+As a prototype civic workflow demonstration:
+1. **Production AWS Deployment:** Not deployed to live production AWS infrastructure; runs against local emulation (LocalStack) or in-memory fallback.
+2. **Authentication / Identity:** Uses local simulated principal identity headers (`x-jarvis-role`, `x-jarvis-principal-id`); production OAuth2 / OIDC provider is not integrated.
+3. **Government Integration:** Not integrated with real municipal or government grievance management APIs; all dockets are citizen-side structured records.
+4. **Evidence Scanning:** Evidence pipeline enforces file extension checks, magic-byte signatures, and a 10MB bounded upload limit; deep binary malware scanning is not implemented.

@@ -22,6 +22,7 @@ async def intake_conversation(request: ConversationRequest) -> ConversationRespo
         return ConversationResponse(
             session_id=request.session_id,
             state=updated_state,
+            reply=updated_state.followup_question,
         )
     except ValueError as ve:
         logger.warning("Civic intake validation failure: %s", ve)

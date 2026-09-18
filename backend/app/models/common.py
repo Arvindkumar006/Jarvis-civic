@@ -43,3 +43,4 @@ class ConversationResponse(BaseModel):
 
     session_id: str = Field(..., description="Active session tracking identifier")
     state: CanonicalCivicState = Field(..., description="Current canonical civic extraction state")
+    reply: Optional[str] = Field(default=None, description="Conversational feedback or follow-up reply")

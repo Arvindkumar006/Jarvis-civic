@@ -304,7 +304,7 @@ export const EvidenceStudio: React.FC<EvidenceStudioProps> = ({ initialCaseId = 
                       {item.state === 'STORED' && (
                         <span className="stored-badge">
                           <CheckCircle2 size={13} color="var(--civic-emerald)" />
-                          <span>VERIFIED IN S3</span>
+                          <span>STORED IN S3</span>
                         </span>
                       )}
                     </div>
@@ -444,7 +444,7 @@ export const EvidenceStudio: React.FC<EvidenceStudioProps> = ({ initialCaseId = 
               <span className="node-step">01</span>
               <div>
                 <strong>Select File</strong>
-                <p>Stage verified photo, audio, or document</p>
+                <p>Stage photo, audio, or document evidence</p>
               </div>
             </div>
             <div className="pipeline-connector">↓</div>
@@ -494,7 +494,7 @@ export const EvidenceStudio: React.FC<EvidenceStudioProps> = ({ initialCaseId = 
               <span className="node-step">06</span>
               <div>
                 <strong>Civic Record</strong>
-                <p>Verified evidence metadata attached to docket</p>
+                <p>Evidence metadata attached to docket</p>
               </div>
             </div>
           </div>

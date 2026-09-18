@@ -66,6 +66,7 @@ export const App: React.FC = () => {
 
   // Location / Map Confirmation state
   const [confirmedLocation, setConfirmedLocation] = useState<string | null>(null);
+  const [selectedCoordinates, setSelectedCoordinates] = useState<{ lat: number; lng: number; source: 'MAP_SELECTED' } | null>(null);
 
   // Docket modal & Case creation state
   const [isDocketModalOpen, setIsDocketModalOpen] = useState(false);
@@ -229,6 +230,7 @@ export const App: React.FC = () => {
     setChatError(null);
     setCreatedCase(null);
     setConfirmedLocation(null);
+    setSelectedCoordinates(null);
   };
 
   // Create Case Docket handler
@@ -239,6 +241,9 @@ export const App: React.FC = () => {
       department: payload.department,
       pincode: payload.pincode,
       is_public: true,
+      latitude: payload.latitude ?? selectedCoordinates?.lat ?? null,
+      longitude: payload.longitude ?? selectedCoordinates?.lng ?? null,
+      location_source: payload.location_source ?? selectedCoordinates?.source ?? (payload.location ? 'TEXT_REFERENCE' : 'UNCONFIRMED'),
     };
 
     const newCase = await casesApi.createCase(fullPayload);
@@ -287,7 +292,7 @@ export const App: React.FC = () => {
               </div>
               <h1 className="intake-headline">Tell us what needs attention.</h1>
               <p className="intake-subheading">
-                Speak naturally or type what you see. JARVIS transforms civic words into verified actions.
+                Speak naturally or type what you see. JARVIS transforms civic words into structured civic actions.
               </p>
 
               {/* Quick Municipal Scenario Triggers */}
@@ -402,8 +407,16 @@ export const App: React.FC = () => {
                   landmark={canonicalState?.landmark || undefined}
                   interactive={true}
                   allowManualPin={true}
-                  onLocationSelect={(_lat, _lng, name) => {
+                  onLocationSelect={(lat, lng, name) => {
+                    setSelectedCoordinates({ lat, lng, source: 'MAP_SELECTED' });
                     setConfirmedLocation(name || 'Map-Confirmed Location');
+                    setCanonicalState((prev) => prev ? {
+                      ...prev,
+                      latitude: lat,
+                      longitude: lng,
+                      location_source: 'MAP_SELECTED',
+                      location: prev.location || name || 'Map-Confirmed Location',
+                    } : null);
                   }}
                 />
               </section>

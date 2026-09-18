@@ -102,6 +102,9 @@ class CivicCaseCreateRequest(BaseModel):
     department: ControlledDepartment = Field(default=ControlledDepartment.DRAINAGE_STORMWATER)
     pincode: Optional[str] = Field(default=None, description="6-digit PIN code")
     is_public: bool = Field(default=True, description="Whether tracking is publicly accessible")
+    latitude: Optional[float] = Field(default=None, ge=-90.0, le=90.0, description="Confirmed latitude coordinate")
+    longitude: Optional[float] = Field(default=None, ge=-180.0, le=180.0, description="Confirmed longitude coordinate")
+    location_source: Optional[str] = Field(default=None, description="Source of coordinates e.g. MAP_SELECTED")
 
     @field_validator("description", mode="after")
     @classmethod
@@ -220,6 +223,9 @@ class CivicCaseRecord(BaseModel):
     urgency_rationale: Optional[str] = None
     session_id: Optional[str] = None
     is_public: bool = True
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    location_source: Optional[str] = None
     evidence_uris: List[str] = Field(default_factory=list)
     resolution_notes: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -255,13 +261,34 @@ class PublicTrackingProjection(BaseModel):
 
 
 class CaseHistoryItem(BaseModel):
-    """Safe, non-sensitive representation of a civic case lifecycle milestone."""
+    """Canonical representation of a civic case lifecycle milestone."""
 
+    milestone_id: str = Field(..., description="Unique milestone or event identifier")
     status: str = Field(..., description="Lifecycle status code")
     label: str = Field(..., description="Human-readable stage title")
     timestamp: datetime = Field(..., description="UTC timestamp when milestone occurred")
+    department: Optional[str] = Field(default=None, description="Department context")
     description: str = Field(..., description="Neutral explanation of stage")
     actor_role: Optional[str] = Field(default=None, description="General actor role category")
     note: Optional[str] = Field(default=None, description="Safe summary note if applicable")
+
+
+class PublicCaseHistoryItem(BaseModel):
+    """Sanitized public projection of a case lifecycle milestone.
+
+    Strictly withholds internal actor_role, notes, principal identifiers, and metadata.
+    """
+
+    milestone_id: str = Field(..., description="Milestone identifier")
+    status: str = Field(..., description="Lifecycle status code")
+    label: str = Field(..., description="Human-readable stage title")
+    timestamp: datetime = Field(..., description="UTC timestamp when milestone occurred")
+    description: str = Field(..., description="Neutral public-safe explanation of stage")
+
+
+class AuthorizedCaseHistoryItem(CaseHistoryItem):
+    """Department-scoped or administrator authorized case lifecycle milestone."""
+
+    pass
 
 
