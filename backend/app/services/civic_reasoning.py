@@ -13,6 +13,11 @@ _provider = OllamaProvider()
 _coordinator = CivicAgentCoordinator(_provider)
 
 
+def get_coordinator() -> CivicAgentCoordinator:
+    """Return the singleton CivicAgentCoordinator instance."""
+    return _coordinator
+
+
 async def process_civic_message(
     message: str,
     session_id: str,

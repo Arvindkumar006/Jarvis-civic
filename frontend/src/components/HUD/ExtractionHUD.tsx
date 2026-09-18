@@ -191,7 +191,7 @@ export const ExtractionHUD: React.FC<ExtractionHUDProps> = ({
 
           {/* Confidence */}
           <div className="signal-matrix-cell">
-            <span className="signal-field-label">CONFIDENCE</span>
+            <span className="signal-field-label">AI CONFIDENCE</span>
             <div className="signal-confidence-val">
               <div className="confidence-track-mini">
                 <div

@@ -19,6 +19,7 @@ interface CivicMapProps {
   center?: [number, number]; // [lat, lng]
   zoom?: number;
   markers?: MapMarkerItem[];
+  mode?: 'product_visualization' | 'case_tracking';
   interactive?: boolean;
   onLocationSelect?: (lat: number, lng: number, confirmedName?: string) => void;
   locationName?: string;
@@ -104,7 +105,8 @@ export const getApproxCoordinates = (locationText?: string | null): [number, num
 export const CivicMap: React.FC<CivicMapProps> = ({
   center,
   zoom = 14,
-  markers = DEFAULT_SAMPLE_CIVIC_MARKERS,
+  markers,
+  mode = 'case_tracking',
   interactive = true,
   onLocationSelect,
   locationName,
@@ -159,8 +161,10 @@ export const CivicMap: React.FC<CivicMapProps> = ({
 
       mapInstanceRef.current = map;
 
-      // Add signal markers with pulse/radar styling
-      const activeMarkers = markers.length > 0 ? markers : DEFAULT_SAMPLE_CIVIC_MARKERS;
+      // Add signal markers: only use sample markers when explicitly in product visualization mode
+      const activeMarkers = mode === 'product_visualization'
+        ? (markers && markers.length > 0 ? markers : DEFAULT_SAMPLE_CIVIC_MARKERS)
+        : (markers || []);
       activeMarkers.forEach((m) => {
         const markerIcon = L.divIcon({
           className: 'civic-map-div-icon',
@@ -234,7 +238,7 @@ export const CivicMap: React.FC<CivicMapProps> = ({
         mapInstanceRef.current = null;
       }
     };
-  }, [markers.length, allowManualPin, interactive, isKeyConfigured, cartoApiKey]);
+  }, [markers?.length, allowManualPin, interactive, isKeyConfigured, cartoApiKey]);
 
   // Pan to location if updated
   useEffect(() => {

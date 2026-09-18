@@ -273,41 +273,44 @@ class DynamoDBCaseRepository(CaseRepository):
         note: str,
         actor_label: Optional[str] = None,
     ) -> Optional[CivicCaseRecord]:
-        record = self.get_case(case_id)
-        if not record:
-            return None
-
-        record.resolution_notes.append(note)
-        record.updated_at = datetime.now(timezone.utc)
-
-        item = case_record_to_dynamodb(record)
+        now_iso = datetime.now(timezone.utc).isoformat()
         try:
-            self.table.put_item(
-                Item=item,
+            # Atomic list_append in DynamoDB with case existence check
+            self.table.update_item(
+                Key={"case_id": case_id},
+                UpdateExpression="SET resolution_notes = list_append(if_not_exists(resolution_notes, :empty_list), :new_note), updated_at = :updated_at",
                 ConditionExpression="attribute_exists(case_id)",
+                ExpressionAttributeValues={
+                    ":new_note": [note],
+                    ":empty_list": [],
+                    ":updated_at": now_iso,
+                },
             )
-            return record
+            return self.get_case(case_id)
         except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                return None
             logger.error("DynamoDB add_resolution_note failed for '%s': %s", case_id, exc)
             raise
 
     def add_evidence_uri(self, case_id: str, uri: str) -> Optional[CivicCaseRecord]:
-        record = self.get_case(case_id)
-        if not record:
-            return None
-
-        if uri not in record.evidence_uris:
-            record.evidence_uris.append(uri)
-        record.updated_at = datetime.now(timezone.utc)
-
-        item = case_record_to_dynamodb(record)
+        now_iso = datetime.now(timezone.utc).isoformat()
         try:
-            self.table.put_item(
-                Item=item,
+            # Atomic list_append in DynamoDB with case existence check
+            self.table.update_item(
+                Key={"case_id": case_id},
+                UpdateExpression="SET evidence_uris = list_append(if_not_exists(evidence_uris, :empty_list), :new_uri), updated_at = :updated_at",
                 ConditionExpression="attribute_exists(case_id)",
+                ExpressionAttributeValues={
+                    ":new_uri": [uri],
+                    ":empty_list": [],
+                    ":updated_at": now_iso,
+                },
             )
-            return record
+            return self.get_case(case_id)
         except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                return None
             logger.error("DynamoDB add_evidence_uri failed for '%s': %s", case_id, exc)
             raise
 

@@ -498,7 +498,16 @@ def test_evidence_magic_byte_validation_signatures():
     )
     assert res_wav.status_code == 201
 
-    # 5. Invalid binary signature claiming to be PNG
+    # 5. Valid real MP3 header (ID3)
+    real_mp3 = b"ID3\x04\x00\x00\x00\x00\x00#TIT2\x00\x00\x00\x05\x00\x00\x00Civic"
+    res_mp3 = client.post(
+        f"/api/cases/{case_id}/evidence",
+        files={"file": ("voice_note.mp3", io.BytesIO(real_mp3), "audio/mpeg")},
+        headers=cit_headers,
+    )
+    assert res_mp3.status_code == 201
+
+    # 6. Invalid binary signature claiming to be PNG
     corrupt_binary = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08"
     res_corrupt = client.post(
         f"/api/cases/{case_id}/evidence",
@@ -508,19 +517,76 @@ def test_evidence_magic_byte_validation_signatures():
     assert res_corrupt.status_code == 400
     assert "magic signature" in res_corrupt.json()["detail"].lower()
 
+    # 7. File with "fake" prefix that was previously bypassed - MUST NOW BE REJECTED
+    fake_prefix_file = b"fake-jpg-content-no-real-signature"
+    res_fake = client.post(
+        f"/api/cases/{case_id}/evidence",
+        files={"file": ("bypass_attempt.jpg", io.BytesIO(fake_prefix_file), "image/jpeg")},
+        headers=cit_headers,
+    )
+    assert res_fake.status_code == 400
+    assert "magic signature" in res_fake.json()["detail"].lower()
+
+    # 8. File with "sample" prefix that was previously bypassed - MUST NOW BE REJECTED
+    sample_prefix_file = b"sample-png-content-no-real-signature"
+    res_sample = client.post(
+        f"/api/cases/{case_id}/evidence",
+        files={"file": ("sample_bypass.png", io.BytesIO(sample_prefix_file), "image/png")},
+        headers=cit_headers,
+    )
+    assert res_sample.status_code == 400
+    assert "magic signature" in res_sample.json()["detail"].lower()
+
+    # 9. Renamed executable binary - MUST BE REJECTED
+    exe_binary = b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00"
+    res_exe = client.post(
+        f"/api/cases/{case_id}/evidence",
+        files={"file": ("trojan.jpg", io.BytesIO(exe_binary), "image/jpeg")},
+        headers=cit_headers,
+    )
+    assert res_exe.status_code == 400
+    assert "magic signature" in res_exe.json()["detail"].lower()
+
 
 # 14. Non-civic short-circuit
 @pytest.mark.asyncio
 async def test_non_civic_short_circuit():
     """Verify non-civic messages do not create civic cases or run full routing pipeline."""
-    res = await process_civic_message(
+    # Greeting query
+    res1 = await process_civic_message(
         message="Hello, good morning! Hope you are having a nice day.",
         session_id="session-greeting-non-civic-1",
     )
-    assert res.intent is None
-    assert res.department is None
-    assert res.ready_for_action is False
-    assert "civic" in res.followup_question.lower()
+    assert res1.intent is None
+    assert res1.department is None
+    assert res1.ready_for_action is False
+
+    # Poem request
+    res2 = await process_civic_message(
+        message="Write me a poem about the sunrise and the blue sky.",
+        session_id="session-non-civic-poem-1",
+    )
+    assert res2.intent is None
+    assert res2.department is None
+    assert res2.ready_for_action is False
+
+    # Math problem request
+    res3 = await process_civic_message(
+        message="Solve this math problem: 2x + 5 = 15.",
+        session_id="session-non-civic-math-1",
+    )
+    assert res3.intent is None
+    assert res3.department is None
+    assert res3.ready_for_action is False
+
+    # Capital trivia question
+    res4 = await process_civic_message(
+        message="What is the capital of France?",
+        session_id="session-non-civic-trivia-1",
+    )
+    assert res4.intent is None
+    assert res4.department is None
+    assert res4.ready_for_action is False
 
 
 # 15. LLM output trust boundary
@@ -553,3 +619,96 @@ def test_health_endpoints_truthfulness():
     for dep_key, dep_val in data["dependencies"].items():
         assert "secret" not in str(dep_val).lower()
         assert "key" not in str(dep_val).lower()
+
+
+# 17. Strands Runtime Invocation
+@pytest.mark.asyncio
+async def test_strands_runtime_invocation_on_intake_path(monkeypatch):
+    """Verify that Strands Agent runtime is genuinely executed on intake turn."""
+    from app.services.civic_reasoning import get_coordinator
+    coordinator = get_coordinator()
+
+    invoked_prompts = []
+    original_invoke = coordinator.strands_agent.invoke_async
+
+    async def mock_invoke(prompt, **kwargs):
+        invoked_prompts.append(prompt)
+        return await original_invoke(prompt, **kwargs)
+
+    monkeypatch.setattr(coordinator.strands_agent, "invoke_async", mock_invoke)
+
+    res = await coordinator.execute_intake_turn(
+        message="Pothole near Anna Salai signal causing traffic hazard",
+        session_id="session-strands-runtime-verify-1",
+    )
+    assert len(invoked_prompts) == 1
+    assert "Pothole near Anna Salai" in invoked_prompts[0]
+    assert res.intent == CivicIntent.ROAD_POTHOLE
+
+
+# 18. Durable Audit Initialization Order
+def test_durable_audit_initialization_order():
+    """Verify audit listener is registered and captures events from the very first case request."""
+    from app.services.persistence.factory import initialize_persistence_backend, get_audit_repository
+    initialize_persistence_backend()
+    audit_repo = get_audit_repository()
+
+    create_resp = client.post(
+        "/api/cases",
+        json={
+            "description": "First startup case audit check",
+            "location": "Velachery Bypass",
+            "department": "PWD_ROADS",
+        },
+        headers={"X-Principal-Id": "cit-startup-audit", "X-Principal-Role": "CITIZEN"},
+    )
+    assert create_resp.status_code == 201
+    cid = create_resp.json()["case_id"]
+
+    events = audit_repo.get_events_for_case(cid)
+    assert len(events) >= 1
+    assert events[0].event_type == "DOCKET_CREATED"
+
+
+# 19. Atomic List Append Concurrency
+def test_atomic_list_append_concurrency():
+    """Verify concurrent addition of notes does not overwrite previous entries."""
+    create_resp = client.post(
+        "/api/cases",
+        json={
+            "description": "Concurrency list append test",
+            "location": "Guindy",
+            "department": "PWD_ROADS",
+        },
+        headers={"X-Principal-Id": "cit-concurrency", "X-Principal-Role": "CITIZEN"},
+    )
+    cid = create_resp.json()["case_id"]
+    officer_headers = {
+        "X-Principal-Id": "officer-concurrency",
+        "X-Principal-Role": "AUTHORITY_OFFICER",
+        "X-Principal-Department": "PWD_ROADS",
+    }
+
+    # Add note 1
+    res1 = client.post(
+        f"/api/cases/{cid}/notes",
+        json={"note": "Initial site inspection completed."},
+        headers=officer_headers,
+    )
+    assert res1.status_code == 200
+
+    # Add note 2
+    res2 = client.post(
+        f"/api/cases/{cid}/notes",
+        json={"note": "Contractor assigned for resurfacing."},
+        headers=officer_headers,
+    )
+    assert res2.status_code == 200
+
+    # Retrieve case
+    case_resp = client.get(f"/api/cases/{cid}", headers=officer_headers)
+    assert case_resp.status_code == 200
+    notes = case_resp.json()["resolution_notes"]
+    assert len(notes) == 2
+    assert "Initial site inspection completed." in notes
+    assert "Contractor assigned for resurfacing." in notes

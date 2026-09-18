@@ -127,7 +127,6 @@ class LocalStrandsModel(Model):
         **kwargs: Any,
     ) -> AsyncGenerator[Dict[str, T | Any], None]:
         """Generate structured Pydantic output using the local provider."""
-        # Convert prompt messages to a single string for local model
         text_prompt = "\n".join(
             str(m.content if hasattr(m, "content") else m) for m in (prompt if isinstance(prompt, list) else [prompt])
         )
@@ -136,7 +135,7 @@ class LocalStrandsModel(Model):
             response_model=output_model,
             system_prompt=system_prompt,
         )
-        yield {"structured_output": result}
+        yield {"output": result}
 
     async def stream(
         self,
@@ -150,8 +149,11 @@ class LocalStrandsModel(Model):
         cancel_signal: Optional[threading.Event] = None,
         **kwargs: Any,
     ) -> AsyncIterable[StreamEvent]:
-        """Stream chunks from local model (minimal yield for compliance)."""
+        """Stream chunks from local model yielding structured StreamEvent frames."""
         prompt_text = "\n".join(str(m) for m in (messages if isinstance(messages, list) else [messages]))
         text = await self.provider.generate_text(prompt=prompt_text, system_prompt=system_prompt)
-        # Yield as string representation
-        yield text  # type: ignore
+        yield {"messageStart": {"role": "assistant"}}  # type: ignore
+        yield {"contentBlockStart": {"start": {"text": {}}}}  # type: ignore
+        yield {"contentBlockDelta": {"delta": {"text": text or "Civic analysis processed."}}}  # type: ignore
+        yield {"contentBlockStop": {}}  # type: ignore
+        yield {"messageStop": {"stopReason": "end_turn"}}  # type: ignore

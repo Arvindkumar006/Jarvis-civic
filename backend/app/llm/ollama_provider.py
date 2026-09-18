@@ -1,7 +1,7 @@
 """Ollama Local Model Provider Implementation for JARVIS Civic.
 
 Interfaces with a local Ollama daemon (e.g. http://localhost:11434).
-Guaranteed zero-cost, zero-cloud, and 100% offline-compatible.
+Guaranteed zero-cost, zero-cloud, and local-model-compatible.
 Fails gracefully without application crash if Ollama is absent or stopped.
 """
 

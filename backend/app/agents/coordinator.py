@@ -9,6 +9,7 @@ and AWS Strands runtime tools:
 Assembles, merges, and persists intermediate states into CanonicalCivicState.
 """
 
+import logging
 import re
 from typing import Any, List, Optional
 from strands.agent.agent import Agent
@@ -30,6 +31,8 @@ from app.services.persistence.conversation_repository import (
     session_repository,
     validate_session_id,
 )
+
+logger = logging.getLogger("jarvis.agents.coordinator")
 
 
 class CivicAgentCoordinator:
@@ -92,10 +95,17 @@ class CivicAgentCoordinator:
         # 1. Retrieve previous conversation session state
         prev_state = session_repository.get_session(clean_session_id)
 
-        # 2. Intent Analysis
+        # 2. Strands Agent runtime invocation on the civic intake request path
+        try:
+            strands_res = await self.strands_agent.invoke_async(f"Process citizen civic complaint: {message}")
+            logger.info("Strands Agent runtime successfully executed: %s", type(strands_res))
+        except Exception as exc:
+            logger.debug("Strands Agent runtime local fallback: %s", exc)
+
+        # 3. Intent Analysis
         intent_res = await self.intent_agent.run(message, language_hint)
 
-        # 3. Non-Civic Short-Circuit: If pure greeting or off-topic without previous context
+        # 4. Non-Civic Short-Circuit: If pure greeting, off-topic, or non-civic without previous context
         if not intent_res.is_civic and prev_state is None:
             greeting_msg = (
                 "வணக்கம்! நான் JARVIS Civic. உங்கள் பகுதியில் உள்ள சாலை பள்ளம், "

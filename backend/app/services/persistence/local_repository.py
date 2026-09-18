@@ -40,13 +40,7 @@ def sanitize_filename(filename: str) -> str:
 
 
 def validate_magic_bytes(file_bytes: bytes, ext: str) -> None:
-    """Validate file signatures (magic bytes) for binary civic evidence formats.
-
-    Validates real signatures for JPEG, PNG, PDF, WAV, MP3 while allowing test
-    fixture byte streams starting with test/fake/sample/dummy prefixes.
-    """
-    if file_bytes.lower().startswith((b"fake", b"sample", b"dummy", b"test", b"drain")):
-        return
+    """Validate file signatures (magic bytes) for binary civic evidence formats."""
 
     if ext in [".jpg", ".jpeg"]:
         if len(file_bytes) < 3 or not file_bytes.startswith(b"\xff\xd8\xff"):

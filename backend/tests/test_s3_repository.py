@@ -66,7 +66,7 @@ def test_local_evidence_repository_upload_and_key_structure():
     repo = LocalEvidenceRepository()
     repo.clear()
 
-    content = b"fake image bytes for civic defect"
+    content = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00" + b"image bytes for civic defect"
     meta = repo.upload_evidence(
         case_id="NS-CHN-2026-9E4B",
         file_bytes=content,
@@ -94,7 +94,7 @@ def test_s3_evidence_repository_with_mocked_boto3():
     mock_s3 = MagicMock()
     repo.s3_client = mock_s3
 
-    content = b"sample evidence image payload"
+    content = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR" + b"evidence image payload"
     meta = repo.upload_evidence(
         case_id="NS-MUM-2026-3C4D",
         file_bytes=content,

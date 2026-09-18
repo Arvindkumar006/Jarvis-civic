@@ -187,6 +187,24 @@ class RequirementIntentAgent:
                 initial_description=message.strip(),
             )
 
+        # Check non-civic queries (math, poetry, trivia, coding, general knowledge)
+        non_civic_patterns = [
+            r"\b(poem|poetry|rhyme|song|sing|lyrics)\b",
+            r"\b(capital\s+of|president\s+of|prime\s+minister\s+of|who\s+is|who\s+won)\b",
+            r"\b(solve|math|equation|calculate\s+\d|formula|algebra)\b",
+            r"\b(recipe|cook|baking|movie|film|actor|cricket|football)\b",
+            r"\b(write\s+code|python\s+script|javascript\s+function|debug\s+this)\b",
+            r"\b(joke|riddle|funny\s+story|tell\s+me\s+a)\b",
+        ]
+        if any(re.search(pat, msg_lower, re.IGNORECASE) for pat in non_civic_patterns):
+            return IntentAnalysis(
+                intent=CivicIntent.OTHER_CIVIC_ISSUE,
+                is_civic=False,
+                language=detected_lang,
+                confidence=0.9,
+                initial_description=message.strip(),
+            )
+
         # Match intent patterns
         for intent, patterns in INTENT_KEYWORD_PATTERNS:
             for pattern in patterns:
@@ -199,7 +217,27 @@ class RequirementIntentAgent:
                         initial_description=message.strip(),
                     )
 
-        # Default fallback
+        # Broad civic indicator keywords to prevent classifying arbitrary off-topic queries as civic
+        broad_civic_keywords = [
+            "road", "street", "water", "drain", "light", "garbage", "trash", "clean", "waste",
+            "leak", "pothole", "traffic", "encroachment", "bridge", "flyover", "park", "manhole",
+            "pipeline", "sewage", "gutter", "signal", "lamp", "sidewalk", "footpath", "complaint",
+            "nagar", "colony", "ward", "corporation", "municipality", "panchayat", "civic",
+            "area", "lane", "avenue", "junction", "sector", "block", "house", "building",
+            "சாலை", "தெரு", "தண்ணீர்", "குப்பை", "விளக்கு", "பள்ளம்",
+            "सड़क", "गली", "पानी", "कचरा", "बिजली", "गड्ढा",
+        ]
+        has_civic_term = any(term in msg_lower for term in broad_civic_keywords)
+        if not has_civic_term:
+            return IntentAnalysis(
+                intent=CivicIntent.OTHER_CIVIC_ISSUE,
+                is_civic=False,
+                language=detected_lang,
+                confidence=0.7,
+                initial_description=message.strip(),
+            )
+
+        # Default fallback for unclassified civic issue
         return IntentAnalysis(
             intent=CivicIntent.OTHER_CIVIC_ISSUE,
             is_civic=True,

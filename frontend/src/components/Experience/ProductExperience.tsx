@@ -127,12 +127,12 @@ const PIPELINE_STAGES: PipelineStage[] = [
   {
     step: '05',
     title: 'ROUTE',
-    badge: 'JURISDICTION ENGINE',
+    badge: 'ROUTING ENGINE',
     summary: 'Recommends competent municipal department automatically.',
     telemetry: {
-      raw: 'Jurisdiction: Greater Chennai Corporation (GCC)',
+      raw: 'Recommended Routing: Municipal Corporation (Example Context)',
       extracted: 'RECOMMENDED DEPARTMENT: DRAINAGE_STORMWATER',
-      rationale: 'Citizen does not need to guess between PWD, GCC, or Metro Water.',
+      rationale: 'Citizen receives clear routing recommendation across municipal departments.',
     },
   },
   {
@@ -509,6 +509,7 @@ export const ProductExperience: React.FC<ProductExperienceProps> = ({
             center={[13.045, 80.23]}
             zoom={12}
             markers={SAMPLE_CITY_MARKERS}
+            mode="product_visualization"
             interactive={true}
             allowManualPin={false}
             locationName="Chennai Metropolitan Area"

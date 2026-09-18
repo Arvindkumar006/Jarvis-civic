@@ -345,20 +345,23 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
     }
   };
 
-  // Map markers
-  const approxCoords = projection ? getApproxCoordinates(projection.case_id) : null;
-  const caseMarkers: MapMarkerItem[] = approxCoords && projection
+  // Case map markers: ONLY use genuine case latitude/longitude if available on the case record
+  const caseCoords = caseRecord && caseRecord.latitude != null && caseRecord.longitude != null
+    ? [caseRecord.latitude, caseRecord.longitude] as [number, number]
+    : null;
+
+  const caseMarkers: MapMarkerItem[] = caseCoords && caseRecord
     ? [
         {
-          id: projection.case_id,
-          lat: approxCoords[0],
-          lng: approxCoords[1],
-          category: 'WATER',
-          title: `Case ${projection.case_id}`,
-          subtitle: `Recommended Dept: ${projection.recommended_department}`,
-          department: projection.recommended_department,
-          urgency: 'Medium',
-          status: projection.status,
+          id: caseRecord.case_id,
+          lat: caseCoords[0],
+          lng: caseCoords[1],
+          category: 'ROAD',
+          title: `Case ${caseRecord.case_id}`,
+          subtitle: `Location: ${caseRecord.location || 'Text Reference'}`,
+          department: caseRecord.department,
+          urgency: caseRecord.urgency || undefined,
+          status: caseRecord.status,
         },
       ]
     : [];
@@ -814,12 +817,13 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
 
                   <div className="case-map-frame">
                     <CivicMap
-                      center={approxCoords || [13.0604, 80.2496]}
-                      zoom={approxCoords ? 14 : 12}
+                      center={caseCoords || [13.0604, 80.2496]}
+                      zoom={caseCoords ? 14 : 11}
                       markers={caseMarkers}
-                      interactive={true}
+                      mode="case_tracking"
+                      interactive={false}
                       allowManualPin={false}
-                      locationName="Civic Landmark Reference"
+                      locationName={caseRecord?.location || 'Location provided as text reference'}
                       className="tracking-case-leaflet-map"
                     />
                   </div>
@@ -827,8 +831,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                   <div className="case-spatial-note">
                     <span className="note-icon">ℹ</span>
                     <span>
-                      Public tracking projections disclose recommended departmental routing and sanitized timestamps.
-                      Exact physical GPS coordinates are withheld from unauthenticated queries to protect citizen privacy.
+                      {caseCoords
+                        ? 'Citizen-selected map coordinates confirmed on docket.'
+                        : 'Exact map position unavailable. Location provided as text reference; physical coordinates withheld on unauthenticated queries.'}
                     </span>
                   </div>
                 </div>

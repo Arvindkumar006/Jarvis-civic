@@ -52,7 +52,7 @@ export const ActionDocketModal: React.FC<ActionDocketModalProps> = ({
 
       await onSubmitCase(payload);
     } catch (err: any) {
-      setSubmitError(err.message || 'Failed to submit civic docket.');
+      setSubmitError(err.message || 'Failed to create civic docket.');
     } finally {
       setIsSubmitting(false);
     }
@@ -163,8 +163,8 @@ export const ActionDocketModal: React.FC<ActionDocketModalProps> = ({
                 </div>
               </div>
               <div className="record-cell">
-                <span className="record-key">JURISDICTION AUTHORITY</span>
-                <div className="record-val">Greater Chennai Corporation (GCC)</div>
+                <span className="record-key">ROUTING CONTEXT</span>
+                <div className="record-val">Municipal Corporation (Recommended Routing)</div>
               </div>
             </div>
           </div>

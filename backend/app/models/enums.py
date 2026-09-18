@@ -103,6 +103,9 @@ class LocationSource(str, Enum):
     """Source semantics for geographic location coordinates."""
 
     TEXT_REFERENCE = "TEXT_REFERENCE"
+    CITIZEN_SELECTED = "CITIZEN_SELECTED"
+    CONFIRMED = "CONFIRMED"
+    UNAVAILABLE = "UNAVAILABLE"
     MAP_SELECTED = "MAP_SELECTED"
     GEOCODED = "GEOCODED"
     UNCONFIRMED = "UNCONFIRMED"

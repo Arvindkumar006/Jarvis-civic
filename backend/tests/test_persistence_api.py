@@ -64,8 +64,8 @@ def test_citizen_can_upload_evidence_to_own_case():
     )
     case_id = create_res.json()["case_id"]
 
-    # Upload evidence file
-    file_content = b"fake jpeg image bytes for pothole proof"
+    # Upload evidence file (valid real JPEG magic bytes FF D8 FF)
+    file_content = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00\x60\x00\x60\x00\x00pothole_proof_bytes"
     files = {"file": ("pothole.jpg", io.BytesIO(file_content), "image/jpeg")}
 
     upload_res = client.post(f"/api/cases/{case_id}/evidence", files=files, headers=headers)
@@ -148,7 +148,7 @@ def test_authority_officer_upload_evidence_scoped():
         "X-Principal-Role": "AUTHORITY_OFFICER",
         "X-Principal-Department": "DRAINAGE_STORMWATER",
     }
-    files = {"file": ("inspection_photo.jpg", io.BytesIO(b"drain repair inspection"), "image/jpeg")}
+    files = {"file": ("inspection_photo.jpg", io.BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF drain repair inspection"), "image/jpeg")}
     res_allowed = client.post(f"/api/cases/{case_id}/evidence", files=files, headers=drainage_officer)
     assert res_allowed.status_code == 201
 
@@ -207,8 +207,8 @@ def test_public_tracking_never_leaks_evidence_uris():
     )
     case_id = create_res.json()["case_id"]
 
-    # Attach evidence
-    files = {"file": ("manhole.jpg", io.BytesIO(b"manhole image content"), "image/jpeg")}
+    # Attach evidence (real JPEG magic bytes)
+    files = {"file": ("manhole.jpg", io.BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF manhole image content"), "image/jpeg")}
     client.post(f"/api/cases/{case_id}/evidence", files=files, headers=headers)
 
     # Public tracking call

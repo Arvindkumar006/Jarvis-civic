@@ -37,8 +37,7 @@ async def get_health_ready(response: Response):
 
     # 1. Check Cedar PDP Engine
     try:
-        # Quick validation of cedar engine instance
-        if cedar_service is not None:
+        if cedar_service is not None and cedar_service.is_healthy():
             dependencies["cedar_engine"] = "available"
         else:
             dependencies["cedar_engine"] = "unavailable"

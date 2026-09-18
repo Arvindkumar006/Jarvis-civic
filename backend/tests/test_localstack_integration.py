@@ -77,10 +77,9 @@ def test_live_localstack_dynamodb_crud(require_localstack):
 
 
 def test_live_localstack_s3_upload(require_localstack):
-    """Verify real S3 put_object and head_object on live LocalStack."""
     s3_repo = S3EvidenceRepository()
     test_case_id = "NS-TST-2026-LIVE"
-    payload = b"Sample binary JPEG payload for live S3 integration test"
+    payload = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00" + b"Live S3 JPEG payload"
 
     meta = s3_repo.upload_evidence(
         case_id=test_case_id,

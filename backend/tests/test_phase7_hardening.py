@@ -342,7 +342,13 @@ def test_evidence_path_traversal_filename_sanitization():
     ]
 
     for malicious_name in traversal_filenames:
-        files = {"file": (malicious_name, b"fake-jpg-binary-content-12345", "image/jpeg")}
+        if malicious_name.endswith(".png"):
+            payload = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR" + b"traversal-content-png"
+            content_type = "image/png"
+        else:
+            payload = b"\xff\xd8\xff\xe0\x00\x10JFIF-traversal-content-12345"
+            content_type = "image/jpeg"
+        files = {"file": (malicious_name, payload, content_type)}
         up_resp = client.post(
             f"/api/cases/{cid}/evidence",
             files=files,

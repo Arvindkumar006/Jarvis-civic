@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from http import HTTPStatus
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -14,6 +15,19 @@ from app.api.audit import router as audit_router
 
 logger = logging.getLogger("jarvis.main")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan context manager: ensures persistence backend & audit listeners are ready."""
+    from app.services.persistence.factory import initialize_persistence_backend
+    try:
+        initialize_persistence_backend()
+        logger.info("Startup: persistence backend and audit listeners successfully initialized.")
+    except Exception as exc:
+        logger.warning("Startup persistence backend initialization notice: %s", exc)
+    yield
+
+
 app = FastAPI(
     title=settings.APP_NAME,
     description=(
@@ -23,6 +37,7 @@ app = FastAPI(
     ),
     version=settings.APP_VERSION,
     debug=settings.DEBUG,
+    lifespan=lifespan,
 )
 
 # Cross-Origin Resource Sharing (CORS)
