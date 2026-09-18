@@ -17,11 +17,17 @@ from app.config.settings import settings
 from app.models.common import generate_case_id
 from app.models.enums import CaseStatus, ControlledDepartment
 from app.models.security import (
+    CaseHistoryItem,
     CivicCaseCreateRequest,
     CivicCaseRecord,
     EvidenceMetadata,
 )
-from app.services.persistence.interface import CaseRepository, EvidenceRepository
+from app.security.audit import AuditEvent, audit_dispatcher
+from app.services.persistence.interface import (
+    AuditRepository,
+    CaseRepository,
+    EvidenceRepository,
+)
 
 
 def sanitize_filename(filename: str) -> str:
@@ -73,6 +79,7 @@ class LocalCaseRepository(CaseRepository):
 
     def __init__(self):
         self._cases: Dict[str, CivicCaseRecord] = {}
+        self._case_history: Dict[str, List[CaseHistoryItem]] = {}
         self._lock = threading.Lock()
 
     def create_case(
@@ -83,6 +90,7 @@ class LocalCaseRepository(CaseRepository):
     ) -> CivicCaseRecord:
         with self._lock:
             cid = case_id or generate_case_id()
+            now = datetime.now(timezone.utc)
             record = CivicCaseRecord(
                 case_id=cid,
                 owner_id=owner_id,
@@ -98,15 +106,29 @@ class LocalCaseRepository(CaseRepository):
                 is_public=request.is_public,
                 resolution_notes=[],
                 evidence_uris=[],
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+                created_at=now,
+                updated_at=now,
             )
             self._cases[cid] = record
+            self._case_history[cid] = [
+                CaseHistoryItem(
+                    status=CaseStatus.DOCKET_CREATED.value,
+                    label="Docket Created",
+                    timestamp=now,
+                    description="Initial Civic Docket recorded in system",
+                    actor_role="CITIZEN",
+                    note="Initial Civic Docket Created",
+                )
+            ]
             return record
 
     def get_case(self, case_id: str) -> Optional[CivicCaseRecord]:
         with self._lock:
             return self._cases.get(case_id)
+
+    def get_case_history(self, case_id: str) -> List[CaseHistoryItem]:
+        with self._lock:
+            return list(self._case_history.get(case_id, []))
 
     def update_case(
         self,
@@ -133,6 +155,7 @@ class LocalCaseRepository(CaseRepository):
         case_id: str,
         new_status: CaseStatus,
         note: Optional[str] = None,
+        actor_label: Optional[str] = None,
     ) -> Optional[CivicCaseRecord]:
         with self._lock:
             record = self._cases.get(case_id)
@@ -142,15 +165,51 @@ class LocalCaseRepository(CaseRepository):
             record.updated_at = datetime.now(timezone.utc)
             if note:
                 record.resolution_notes.append(note)
+            
+            # Record in history
+            if case_id not in self._case_history:
+                self._case_history[case_id] = []
+            
+            status_val = new_status.value if isinstance(new_status, CaseStatus) else str(new_status)
+            status_title = status_val.replace("_", " ").title()
+            self._case_history[case_id].append(
+                CaseHistoryItem(
+                    status=status_val,
+                    label=status_title,
+                    timestamp=record.updated_at,
+                    description=f"Case status updated to {status_title}",
+                    actor_role=actor_label or "AUTHORITY_OFFICER",
+                    note=note,
+                )
+            )
             return record
 
-    def add_resolution_note(self, case_id: str, note: str) -> Optional[CivicCaseRecord]:
+    def add_resolution_note(
+        self,
+        case_id: str,
+        note: str,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
         with self._lock:
             record = self._cases.get(case_id)
             if not record:
                 return None
             record.resolution_notes.append(note)
             record.updated_at = datetime.now(timezone.utc)
+            
+            if case_id not in self._case_history:
+                self._case_history[case_id] = []
+            status_val = record.status.value if isinstance(record.status, CaseStatus) else str(record.status)
+            self._case_history[case_id].append(
+                CaseHistoryItem(
+                    status=status_val,
+                    label="Resolution Note Added",
+                    timestamp=record.updated_at,
+                    description="Official workflow note appended by authority",
+                    actor_role=actor_label or "AUTHORITY_OFFICER",
+                    note=note,
+                )
+            )
             return record
 
     def add_evidence_uri(self, case_id: str, uri: str) -> Optional[CivicCaseRecord]:
@@ -166,6 +225,32 @@ class LocalCaseRepository(CaseRepository):
     def clear(self) -> None:
         with self._lock:
             self._cases.clear()
+            self._case_history.clear()
+
+
+class LocalAuditRepository(AuditRepository):
+    """Thread-safe in-memory audit log store implementing AuditRepository."""
+
+    def __init__(self):
+        self._events: List[AuditEvent] = []
+        self._lock = threading.Lock()
+
+    def record_event(self, event: AuditEvent) -> AuditEvent:
+        with self._lock:
+            self._events.append(event)
+            return event
+
+    def get_events(self, limit: int = 100) -> List[AuditEvent]:
+        with self._lock:
+            return list(reversed(self._events[-limit:]))
+
+    def get_events_for_case(self, case_id: str) -> List[AuditEvent]:
+        with self._lock:
+            return [e for e in self._events if e.case_id == case_id]
+
+    def clear(self) -> None:
+        with self._lock:
+            self._events.clear()
 
 
 class LocalEvidenceRepository(EvidenceRepository):

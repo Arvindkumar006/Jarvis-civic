@@ -140,11 +140,11 @@ def test_authority_officer_updates_case_within_department_scope():
     }
     update_res = client.patch(
         f"/api/cases/{case_id}/status",
-        json={"status": "UNDER_REVIEW", "note": "Inspection scheduled for morning"},
+        json={"status": "ROUTING_PREPARED", "note": "Inspection scheduled for morning"},
         headers=officer_headers,
     )
     assert update_res.status_code == 200
-    assert update_res.json()["status"] == "UNDER_REVIEW"
+    assert update_res.json()["status"] == "ROUTING_PREPARED"
     assert "Inspection scheduled for morning" in update_res.json()["resolution_notes"]
 
 
@@ -279,7 +279,6 @@ def test_audit_dispatcher_records_decisions():
     assert new_count > initial_count
 
     events = audit_dispatcher.get_events()
-    recent = events[0]
-    assert recent.principal_id == "citizen-audit-test"
-    assert recent.action == "create_case"
-    assert recent.decision == "ALLOW"
+    matching = [e for e in events if e.principal_id == "citizen-audit-test" and e.action == "create_case"]
+    assert len(matching) >= 1
+    assert matching[0].decision == "ALLOW"

@@ -804,3 +804,585 @@
   border-top: 1px dashed rgba(255, 255, 255, 0.1);
   letter-spacing: 0.04em;
 }
+
+/* ==========================================================================
+   PHASE 6: AUTHORITY WORKFLOW & AUDIT TRAIL MODES
+   ========================================================================== */
+
+/* Mode Switcher Tabs */
+.tracking-mode-switcher {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-xs);
+  padding: 0.35rem;
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+}
+
+.tracking-mode-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  padding: 0.6rem 0.85rem;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.tracking-mode-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tracking-mode-btn.active {
+  background: var(--bg-surface-1);
+  color: var(--civic-cyan);
+  border-color: rgba(0, 229, 255, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.tracking-mode-btn.mode-authority.active {
+  color: var(--civic-amber);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.tracking-mode-btn.mode-audit.active {
+  color: var(--civic-emerald);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+/* Simulated Actor Console (Test / Simulation Mode) */
+.simulation-control-strip {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-left: 3px solid var(--civic-amber);
+  border-radius: var(--radius-xs);
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.simulation-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.simulation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--civic-amber);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 0.2rem 0.55rem;
+  border-radius: 2px;
+  letter-spacing: 0.05em;
+}
+
+.simulation-notice {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.simulation-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.65rem;
+  align-items: end;
+}
+
+.sim-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sim-field-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sim-field-select,
+.sim-field-input {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.45rem 0.6rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.sim-field-select:focus,
+.sim-field-input:focus {
+  border-color: var(--civic-cyan);
+}
+
+/* Authority Workflow Specifics */
+.authority-workspace-card {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.authority-stage-transition-panel {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius-xs);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.transition-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.transition-flow-visual {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 0.85rem 1rem;
+}
+
+.stage-badge-node {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.stage-badge-node .s-label {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-dim);
+}
+
+.stage-badge-node .s-val {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.stage-badge-node.next .s-val {
+  color: var(--civic-amber);
+}
+
+.transition-arrow-symbol {
+  font-size: 1.1rem;
+  color: var(--civic-amber);
+}
+
+.btn-advance-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--civic-amber);
+  color: #000;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.7rem 1.25rem;
+  border: none;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  letter-spacing: 0.03em;
+}
+
+.btn-advance-status:hover:not(:disabled) {
+  filter: brightness(1.15);
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.4);
+}
+
+.btn-advance-status:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Department Mismatch Banner */
+.dept-mismatch-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-left: 3px solid var(--civic-crimson);
+  border-radius: var(--radius-xs);
+  padding: 0.85rem 1rem;
+  color: var(--text-primary);
+}
+
+.dept-mismatch-title {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #f87171;
+  margin-bottom: 0.2rem;
+}
+
+.dept-mismatch-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Resolution Record Panel */
+.resolution-section-panel {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.resolution-record-item {
+  background: rgba(0, 0, 0, 0.4);
+  border-left: 2px solid var(--civic-emerald);
+  padding: 0.75rem 1rem;
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.resolution-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-dim);
+}
+
+.resolution-text {
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+/* Confirmation Dialog */
+.confirm-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.confirm-dialog-box {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  max-width: 480px;
+  width: 100%;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.btn-dialog-cancel {
+  background: transparent;
+  border: 1px solid var(--border-medium);
+  color: var(--text-muted);
+  padding: 0.5rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+}
+
+.btn-dialog-confirm {
+  background: var(--civic-amber);
+  border: none;
+  color: #000;
+  padding: 0.5rem 1.15rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+}
+
+/* CEDAR AUDIT TRAIL MODE */
+.audit-security-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-left: 3px solid var(--civic-emerald);
+  border-radius: var(--radius-xs);
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.audit-banner-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--civic-emerald);
+  letter-spacing: 0.04em;
+}
+
+.audit-restricted-state {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px dashed rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 2.5rem 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.restricted-lock-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f87171;
+  margin-bottom: 0.25rem;
+}
+
+.restricted-title {
+  font-family: var(--font-editorial);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.restricted-sub {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: #f87171;
+  letter-spacing: 0.05em;
+}
+
+.restricted-desc {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  max-width: 520px;
+  line-height: 1.5;
+}
+
+/* Vertical Connected Audit Timeline */
+.audit-timeline-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: relative;
+  padding-left: 1rem;
+}
+
+.audit-timeline-container::before {
+  content: '';
+  position: absolute;
+  left: 1.7rem;
+  top: 1rem;
+  bottom: 1rem;
+  width: 2px;
+  background: var(--border-medium);
+}
+
+.audit-event-card {
+  display: flex;
+  gap: 1rem;
+  position: relative;
+}
+
+.audit-node-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-surface-2);
+  border: 2px solid var(--civic-emerald);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  color: var(--civic-emerald);
+  z-index: 2;
+  flex-shrink: 0;
+  margin-top: 0.5rem;
+}
+
+.audit-node-dot.status-transition {
+  border-color: var(--civic-cyan);
+  color: var(--civic-cyan);
+}
+
+.audit-node-dot.resolution-note {
+  border-color: var(--civic-amber);
+  color: var(--civic-amber);
+}
+
+.audit-content-card {
+  flex: 1;
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-xs);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.audit-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.audit-event-type-badge {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--civic-cyan);
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  padding: 0.15rem 0.45rem;
+  border-radius: 2px;
+}
+
+.audit-timestamp-text {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+
+.audit-actor-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.audit-actor-role-badge {
+  font-weight: 600;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.1rem 0.4rem;
+  border-radius: 2px;
+}
+
+.audit-status-shift-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.35rem 0.6rem;
+  border-radius: 2px;
+  width: fit-content;
+}
+
+.audit-meta-note {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.4rem 0.6rem;
+  border-radius: 2px;
+  border-left: 2px solid var(--civic-cyan);
+}
+
+/* Responsive UI Hardening (1440px down to 390px) */
+@media (max-width: 680px) {
+  .tracking-mode-switcher {
+    padding: 0.25rem;
+  }
+  .tracking-mode-btn {
+    padding: 0.5rem 0.65rem;
+    font-size: 0.7rem;
+  }
+  .transition-flow-visual {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .audit-timeline-container {
+    padding-left: 0.25rem;
+  }
+  .audit-timeline-container::before {
+    left: 0.95rem;
+  }
+  .audit-card-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .audit-actor-row {
+    flex-wrap: wrap;
+  }
+  .confirm-dialog-box {
+    max-width: 92vw;
+    padding: 1.25rem;
+  }
+}
+
+

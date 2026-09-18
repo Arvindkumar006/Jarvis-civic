@@ -66,12 +66,14 @@ class PolicyEnforcementPoint:
 
         # Record application-level audit event
         audit_event = AuditEvent(
+            case_id=resource_id if resource_type == "CivicCase" else None,
             principal_id=principal.principal_id,
             principal_role=principal.role.value,
             action=action.value if isinstance(action, CivicAction) else str(action),
             resource_id=resource_id,
             resource_type=resource_type,
             decision=decision.decision,
+            outcome=decision.decision,
             reason=decision.reason,
             policy_id=decision.policy_id,
             correlation_id=correlation_id,

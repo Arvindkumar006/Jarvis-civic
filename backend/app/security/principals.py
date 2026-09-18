@@ -20,14 +20,21 @@ def get_current_principal(
     x_principal_id: Optional[str] = Header(default=None, alias="X-Principal-Id"),
     x_principal_role: Optional[str] = Header(default=None, alias="X-Principal-Role"),
     x_principal_department: Optional[str] = Header(default=None, alias="X-Principal-Department"),
+    x_simulated_id: Optional[str] = Header(default=None, alias="X-Simulated-Principal-Id"),
+    x_simulated_role: Optional[str] = Header(default=None, alias="X-Simulated-Role"),
+    x_simulated_department: Optional[str] = Header(default=None, alias="X-Simulated-Department"),
 ) -> ApplicationPrincipal:
-    """Resolve the active principal from DEV/test headers.
+    """Resolve the active principal from DEV/test/simulation headers.
 
     WARNING: This is strictly a local development/test identity mechanism.
     Production identity verification and authentication will be implemented in later phases.
     """
+    effective_id = x_principal_id or x_simulated_id
+    effective_role = x_principal_role or x_simulated_role
+    effective_dept = x_principal_department or x_simulated_department
+
     # 1. No identity headers provided -> Default strictly to PUBLIC
-    if not x_principal_id or not x_principal_role:
+    if not effective_id or not effective_role:
         return ApplicationPrincipal(
             principal_id="anonymous-public-user",
             role=ApplicationRole.PUBLIC,
@@ -35,22 +42,22 @@ def get_current_principal(
         )
 
     # 2. Validate role
-    role_str = x_principal_role.strip().upper()
+    role_str = effective_role.strip().upper()
     try:
         role = ApplicationRole(role_str)
     except ValueError:
         # Invalid role string -> Degrade safely to PUBLIC (never grant elevated privileges)
         return ApplicationPrincipal(
-            principal_id=x_principal_id.strip(),
+            principal_id=effective_id.strip(),
             role=ApplicationRole.PUBLIC,
             department=None,
         )
 
     # 3. Clean department if authority role
-    clean_dept = x_principal_department.strip() if x_principal_department else None
+    clean_dept = effective_dept.strip() if effective_dept else None
 
     return ApplicationPrincipal(
-        principal_id=x_principal_id.strip(),
+        principal_id=effective_id.strip(),
         role=role,
         department=clean_dept,
     )

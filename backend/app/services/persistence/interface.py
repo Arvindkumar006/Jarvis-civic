@@ -5,9 +5,10 @@ storage (LocalStack DynamoDB, LocalStack S3, or In-Memory Local Fallback).
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import Any, List, Optional
 from app.models.enums import CaseStatus
 from app.models.security import (
+    CaseHistoryItem,
     CivicCaseCreateRequest,
     CivicCaseRecord,
     EvidenceMetadata,
@@ -64,6 +65,11 @@ class CaseRepository(ABC):
         pass
 
     @abstractmethod
+    def get_case_history(self, case_id: str) -> List[CaseHistoryItem]:
+        """Retrieve sanitized lifecycle history for the case."""
+        pass
+
+    @abstractmethod
     def clear(self) -> None:
         """Clear all stored cases (primarily for test fixture isolation)."""
         pass
@@ -87,3 +93,37 @@ class EvidenceRepository(ABC):
     def get_evidence_metadata(self, case_id: str, evidence_id: str) -> Optional[EvidenceMetadata]:
         """Fetch metadata for an evidence item."""
         pass
+
+
+class AuditRepository(ABC):
+    """Abstract repository contract for append-only audit persistence."""
+
+    @abstractmethod
+    def record_event(self, event: Any) -> None:
+        """Append an audit event to persistent storage."""
+        pass
+
+    @abstractmethod
+    def get_events(
+        self,
+        department: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Any]:
+        """Retrieve audit events, optionally filtered by department scope."""
+        pass
+
+    @abstractmethod
+    def get_events_for_case(
+        self,
+        case_id: str,
+        department: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Any]:
+        """Retrieve audit events for a specific case ID."""
+        pass
+
+    @abstractmethod
+    def clear(self) -> None:
+        """Clear all stored audit events (primarily for test fixture isolation)."""
+        pass
+

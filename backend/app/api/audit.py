@@ -10,7 +10,7 @@ Access Control:
 """
 
 from typing import List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.models.security import (
     ApplicationPrincipal,
@@ -20,6 +20,7 @@ from app.models.security import (
 from app.security.audit import AuditEvent, audit_dispatcher
 from app.security.pep import pep
 from app.security.principals import get_current_principal
+from app.services.case_store import case_store
 
 router = APIRouter(prefix="/api/audit", tags=["Security Audit"])
 
@@ -47,3 +48,39 @@ def get_audit_logs(
 
     # Administrator receives all records
     return audit_dispatcher.get_events()
+
+
+@router.get("/cases/{case_id}", response_model=List[AuditEvent])
+def get_case_audit_trail(
+    case_id: str,
+    principal: ApplicationPrincipal = Depends(get_current_principal),
+) -> List[AuditEvent]:
+    """Retrieve audit events for a specific case.
+
+    Protected by Cedar under 'read_audit_log'.
+    Supervisor is scoped to supervisor's assigned department matching case.department.
+    Administrator has universal access.
+    Citizen / Public / AuthorityOfficer: Strictly DENIED (HTTP 403).
+    """
+    case = case_store.get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+
+    # Enforce Cedar authorization
+    pep.enforce(
+        principal=principal,
+        action=CivicAction.READ_AUDIT_LOG,
+        resource_id=f"audit_case_{case.case_id}",
+        resource_type="AuditRecord",
+        resource_department=case.department,
+    )
+
+    # Supervisor double-check on department
+    if principal.role == ApplicationRole.MUNICIPAL_SUPERVISOR:
+        if principal.department != case.department:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Department scope mismatch for supervisor audit access",
+            )
+
+    return audit_dispatcher.get_events_for_case(case_id)

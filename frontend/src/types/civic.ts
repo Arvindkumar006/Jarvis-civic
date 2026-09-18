@@ -37,6 +37,47 @@ export enum CaseStatus {
   RESOLVED = 'RESOLVED',
 }
 
+export enum ApplicationRole {
+  CITIZEN = 'CITIZEN',
+  AUTHORITY_OFFICER = 'AUTHORITY_OFFICER',
+  MUNICIPAL_SUPERVISOR = 'MUNICIPAL_SUPERVISOR',
+  ADMINISTRATOR = 'ADMINISTRATOR',
+  PUBLIC = 'PUBLIC',
+}
+
+export interface AuditEvent {
+  event_id: string;
+  case_id?: string | null;
+  event_type: string;
+  principal_id: string;
+  principal_role: string;
+  principal_department?: string | null;
+  outcome: string;
+  previous_status?: string | null;
+  new_status?: string | null;
+  metadata?: Record<string, any>;
+  timestamp: string;
+}
+
+export interface CaseHistoryItem {
+  milestone_id: string;
+  stage: string;
+  label: string;
+  timestamp: string;
+  department?: string | null;
+  description: string;
+  notes_count: number;
+}
+
+export interface StatusTransitionRequest {
+  status: CaseStatus;
+  note?: string;
+}
+
+export interface ResolutionNoteRequest {
+  note: string;
+}
+
 export enum EvidenceType {
   IMAGE = 'IMAGE',
   VIDEO = 'VIDEO',

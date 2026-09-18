@@ -172,3 +172,15 @@ class PublicTrackingProjection(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
+class CaseHistoryItem(BaseModel):
+    """Safe, non-sensitive representation of a civic case lifecycle milestone."""
+
+    status: str = Field(..., description="Lifecycle status code")
+    label: str = Field(..., description="Human-readable stage title")
+    timestamp: datetime = Field(..., description="UTC timestamp when milestone occurred")
+    description: str = Field(..., description="Neutral explanation of stage")
+    actor_role: Optional[str] = Field(default=None, description="General actor role category")
+    note: Optional[str] = Field(default=None, description="Safe summary note if applicable")
+
+

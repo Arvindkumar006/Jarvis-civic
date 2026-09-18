@@ -119,7 +119,7 @@ def test_init_localstack_resources_idempotent():
         mock_boto_client.return_value = mock_client
 
         # Simulate tables and buckets already existing
-        mock_client.list_tables.return_value = {"TableNames": ["JarvisCivicCases"]}
+        mock_client.list_tables.return_value = {"TableNames": ["JarvisCivicCases", "JarvisCivicAudit"]}
         mock_client.list_buckets.return_value = {"Buckets": [{"Name": "jarvis-civic-evidence"}]}
 
         res = init_localstack_resources()
@@ -127,3 +127,4 @@ def test_init_localstack_resources_idempotent():
         # create_table and create_bucket should NOT be called since they already exist
         assert not mock_client.create_table.called
         assert not mock_client.create_bucket.called
+

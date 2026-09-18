@@ -58,6 +58,38 @@ class CaseStatus(str, Enum):
     RESOLVED = "RESOLVED"
 
 
+# Centralized canonical lifecycle transition rules (single-step forward progression only)
+VALID_STATUS_TRANSITIONS: dict[CaseStatus, list[CaseStatus]] = {
+    CaseStatus.DRAFT: [CaseStatus.DOCKET_CREATED],
+    CaseStatus.DOCKET_CREATED: [CaseStatus.ROUTING_PREPARED],
+    CaseStatus.ROUTING_PREPARED: [CaseStatus.SUBMISSION_READY],
+    CaseStatus.SUBMISSION_READY: [CaseStatus.UNDER_REVIEW],
+    CaseStatus.UNDER_REVIEW: [CaseStatus.RESOLVED],
+    CaseStatus.RESOLVED: [],
+}
+
+
+def validate_status_transition(current_status: CaseStatus, new_status: CaseStatus) -> None:
+    """Validate that status transition follows canonical single-step forward progression.
+
+    Enforces strict forward lifecycle stages:
+    01 DOCKET_CREATED -> 02 ROUTING_PREPARED -> 03 SUBMISSION_READY -> 04 UNDER_REVIEW -> 05 RESOLVED.
+    Rejects skipped stages, backwards transitions, same-status loops, and arbitrary assignment with HTTP 409 Conflict.
+    """
+    from fastapi import HTTPException, status
+
+    allowed_targets = VALID_STATUS_TRANSITIONS.get(current_status, [])
+    if new_status not in allowed_targets:
+        expected = allowed_targets[0].value if allowed_targets else "None (terminal state)"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Invalid status transition: cannot transition from '{current_status.value}' "
+                f"to '{new_status.value}'. Expected next stage: '{expected}'."
+            ),
+        )
+
+
 class EvidenceType(str, Enum):
     """Supported evidence types for civic complaints."""
 

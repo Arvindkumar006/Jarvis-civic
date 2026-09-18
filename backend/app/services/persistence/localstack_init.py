@@ -16,15 +16,16 @@ logger = logging.getLogger("jarvis.persistence.init")
 def init_localstack_resources(
     endpoint_url: str = settings.LOCALSTACK_ENDPOINT_URL,
     table_name: str = settings.DYNAMODB_TABLE_NAME,
+    audit_table_name: str = settings.DYNAMODB_AUDIT_TABLE_NAME,
     bucket_name: str = settings.S3_BUCKET_NAME,
     region_name: str = settings.AWS_REGION,
 ) -> bool:
-    """Initialize DynamoDB table and S3 bucket on LocalStack idempotently.
+    """Initialize DynamoDB tables and S3 bucket on LocalStack idempotently.
 
     Returns True if successfully initialized or already existing, False if unreachable.
     """
     try:
-        # 1. DynamoDB Table Initialization
+        # 1. DynamoDB Cases Table Initialization
         dynamodb = boto3.client(
             "dynamodb",
             endpoint_url=endpoint_url,
@@ -49,6 +50,35 @@ def init_localstack_resources(
             logger.info("LocalStack: DynamoDB table '%s' created.", table_name)
         else:
             logger.info("LocalStack: DynamoDB table '%s' already exists.", table_name)
+
+        # 1b. DynamoDB Audit Table Initialization
+        if audit_table_name not in existing_tables:
+            logger.info("LocalStack: Creating DynamoDB audit table '%s'...", audit_table_name)
+            dynamodb.create_table(
+                TableName=audit_table_name,
+                KeySchema=[
+                    {"AttributeName": "event_id", "KeyType": "HASH"},
+                ],
+                AttributeDefinitions=[
+                    {"AttributeName": "event_id", "AttributeType": "S"},
+                    {"AttributeName": "case_id", "AttributeType": "S"},
+                ],
+                GlobalSecondaryIndexes=[
+                    {
+                        "IndexName": "CaseIndex",
+                        "KeySchema": [
+                            {"AttributeName": "case_id", "KeyType": "HASH"},
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL",
+                        },
+                    }
+                ],
+                BillingMode="PAY_PER_REQUEST",
+            )
+            logger.info("LocalStack: DynamoDB audit table '%s' created.", audit_table_name)
+        else:
+            logger.info("LocalStack: DynamoDB audit table '%s' already exists.", audit_table_name)
 
         # 2. S3 Bucket Initialization
         s3 = boto3.client(

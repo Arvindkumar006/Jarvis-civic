@@ -4,11 +4,19 @@ Phase 4: Bridges API routes to the active persistence repository (LocalStack
 DynamoDB or Local in-memory fallback), preserving full Phase 3 backward compatibility.
 """
 
-from typing import Optional
+from typing import List, Optional
 from app.models.enums import CaseStatus
-from app.models.security import CivicCaseCreateRequest, CivicCaseRecord
-from app.services.persistence.factory import get_repositories
-from app.services.persistence.interface import CaseRepository, EvidenceRepository
+from app.models.security import (
+    CaseHistoryItem,
+    CivicCaseCreateRequest,
+    CivicCaseRecord,
+)
+from app.services.persistence.factory import get_audit_repository, get_repositories
+from app.services.persistence.interface import (
+    AuditRepository,
+    CaseRepository,
+    EvidenceRepository,
+)
 
 
 class CaseServiceFacade:
@@ -24,6 +32,10 @@ class CaseServiceFacade:
         _, ev_repo = get_repositories()
         return ev_repo
 
+    @property
+    def audit_repo(self) -> AuditRepository:
+        return get_audit_repository()
+
     def create_case(
         self,
         request: CivicCaseCreateRequest,
@@ -36,6 +48,10 @@ class CaseServiceFacade:
     def get_case(self, case_id: str) -> Optional[CivicCaseRecord]:
         """Fetch case by case_id."""
         return self._case_repo.get_case(case_id)
+
+    def get_case_history(self, case_id: str) -> List[CaseHistoryItem]:
+        """Fetch public-safe lifecycle history for a case."""
+        return self._case_repo.get_case_history(case_id)
 
     def update_case(
         self,
@@ -57,13 +73,21 @@ class CaseServiceFacade:
         case_id: str,
         new_status: CaseStatus,
         note: Optional[str] = None,
+        actor_label: Optional[str] = None,
     ) -> Optional[CivicCaseRecord]:
         """Update case lifecycle status."""
-        return self._case_repo.update_case_status(case_id, new_status=new_status, note=note)
+        return self._case_repo.update_case_status(
+            case_id, new_status=new_status, note=note, actor_label=actor_label
+        )
 
-    def add_resolution_note(self, case_id: str, note: str) -> Optional[CivicCaseRecord]:
+    def add_resolution_note(
+        self,
+        case_id: str,
+        note: str,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
         """Append an authority resolution note."""
-        return self._case_repo.add_resolution_note(case_id, note=note)
+        return self._case_repo.add_resolution_note(case_id, note=note, actor_label=actor_label)
 
     def add_evidence_uri(self, case_id: str, uri: str) -> Optional[CivicCaseRecord]:
         """Attach an evidence storage URI to the case."""
@@ -72,6 +96,7 @@ class CaseServiceFacade:
     def clear(self) -> None:
         """Clear cases (useful for test fixtures)."""
         self._case_repo.clear()
+        self.audit_repo.clear()
 
 
 # Global facade instance preserving existing Phase 3 import path

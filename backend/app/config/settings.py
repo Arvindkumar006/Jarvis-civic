@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     PERSISTENCE_BACKEND: str = "local"  # "local" or "localstack"
     LOCALSTACK_ENDPOINT_URL: str = "http://localhost:4566"
     DYNAMODB_TABLE_NAME: str = "JarvisCivicCases"
+    DYNAMODB_AUDIT_TABLE_NAME: str = "JarvisCivicAudit"
     S3_BUCKET_NAME: str = "jarvis-civic-evidence"
     AWS_REGION: str = "us-east-1"
     AWS_ACCESS_KEY_ID: str = "test"
