@@ -13,6 +13,6 @@ def get_health():
         "status": "ok",
         "service": "jarvis-civic",
         "version": settings.APP_VERSION,
-        "phase": "Phase 1 - Foundation & Data Contracts",
+        "phase": "Phase 7 - Polish, Verification & Production Hardening",
         "disclaimer": settings.DISCLAIMER,
     }

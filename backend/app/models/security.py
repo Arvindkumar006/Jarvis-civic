@@ -9,10 +9,11 @@ They do NOT represent official government credentials, government identity verif
 proof of civil service employment, or municipal legal authority.
 """
 
+import re
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.enums import CaseStatus, ControlledDepartment
 
@@ -96,32 +97,112 @@ class AuthorizationDecision(BaseModel):
 class CivicCaseCreateRequest(BaseModel):
     """Payload to create a new civic case."""
 
-    description: str = Field(..., min_length=5, description="Citizen's problem statement")
-    location: str = Field(..., min_length=2, description="Street, landmark, or area")
+    description: str = Field(..., min_length=5, max_length=5000, description="Citizen's problem statement")
+    location: str = Field(..., min_length=2, max_length=500, description="Street, landmark, or area")
     department: ControlledDepartment = Field(default=ControlledDepartment.DRAINAGE_STORMWATER)
     pincode: Optional[str] = Field(default=None, description="6-digit PIN code")
     is_public: bool = Field(default=True, description="Whether tracking is publicly accessible")
+
+    @field_validator("description", mode="after")
+    @classmethod
+    def validate_description(cls, v: str) -> str:
+        cleaned = v.strip()
+        if len(cleaned) < 5:
+            raise ValueError("Description must contain at least 5 non-whitespace characters.")
+        return cleaned
+
+    @field_validator("location", mode="after")
+    @classmethod
+    def validate_location(cls, v: str) -> str:
+        cleaned = v.strip()
+        if len(cleaned) < 2:
+            raise ValueError("Location must contain at least 2 non-whitespace characters.")
+        return cleaned
+
+    @field_validator("pincode", mode="after")
+    @classmethod
+    def validate_pincode(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            cleaned = v.strip()
+            if not cleaned:
+                return None
+            if not re.match(r"^[1-9][0-9]{5}$", cleaned):
+                raise ValueError(
+                    f"Invalid PIN code '{cleaned}'. Must be a 6-digit Indian postal code starting with 1-9 (e.g. '560038')."
+                )
+            return cleaned
+        return v
 
 
 class CivicCaseUpdateRequest(BaseModel):
     """Payload to update citizen's own case details."""
 
-    description: Optional[str] = Field(default=None, min_length=5)
-    location: Optional[str] = Field(default=None, min_length=2)
+    description: Optional[str] = Field(default=None, min_length=5, max_length=5000)
+    location: Optional[str] = Field(default=None, min_length=2, max_length=500)
     pincode: Optional[str] = Field(default=None)
+
+    @field_validator("description", mode="after")
+    @classmethod
+    def validate_update_desc(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            cleaned = v.strip()
+            if len(cleaned) < 5:
+                raise ValueError("Description must contain at least 5 non-whitespace characters.")
+            return cleaned
+        return v
+
+    @field_validator("location", mode="after")
+    @classmethod
+    def validate_update_loc(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            cleaned = v.strip()
+            if len(cleaned) < 2:
+                raise ValueError("Location must contain at least 2 non-whitespace characters.")
+            return cleaned
+        return v
+
+    @field_validator("pincode", mode="after")
+    @classmethod
+    def validate_update_pincode(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            cleaned = v.strip()
+            if not cleaned:
+                return None
+            if not re.match(r"^[1-9][0-9]{5}$", cleaned):
+                raise ValueError(
+                    f"Invalid PIN code '{cleaned}'. Must be a 6-digit Indian postal code starting with 1-9 (e.g. '560038')."
+                )
+            return cleaned
+        return v
 
 
 class CivicCaseStatusUpdateRequest(BaseModel):
     """Payload for authority status update."""
 
     status: CaseStatus = Field(..., description="Target case lifecycle status")
-    note: Optional[str] = Field(default=None, description="Optional transition note")
+    note: Optional[str] = Field(default=None, max_length=2000, description="Optional transition note")
+
+    @field_validator("note", mode="after")
+    @classmethod
+    def clean_note(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            cleaned = v.strip()
+            return cleaned if cleaned else None
+        return v
 
 
 class ResolutionNoteRequest(BaseModel):
     """Payload for authority resolution note."""
 
-    note: str = Field(..., min_length=3, description="Authority resolution or inspection note")
+    note: str = Field(..., min_length=3, max_length=2000, description="Authority resolution or inspection note")
+
+    @field_validator("note", mode="after")
+    @classmethod
+    def validate_note(cls, v: str) -> str:
+        cleaned = v.strip()
+        if len(cleaned) < 3:
+            raise ValueError("Resolution note must contain at least 3 non-whitespace characters.")
+        return cleaned
 
 
 class CivicCaseRecord(BaseModel):

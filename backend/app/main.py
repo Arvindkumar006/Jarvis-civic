@@ -1,10 +1,9 @@
-"""Main Application Entrypoint for JARVIS Civic Backend.
-
-Phase 2: AWS Strands Agents & Local LLM Provider.
-"""
-
-from fastapi import FastAPI
+import logging
+from http import HTTPStatus
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config.settings import settings
 from app.api.health import router as health_router
@@ -12,6 +11,8 @@ from app.api.conversation import router as conversation_router
 from app.api.cases import router as cases_router
 from app.api.tracking import router as tracking_router
 from app.api.audit import router as audit_router
+
+logger = logging.getLogger("jarvis.main")
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -33,6 +34,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Fail-safe handler for unhandled internal exceptions, preventing stack trace leaks."""
+    logger.error("Unhandled internal exception on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "An internal server error occurred while processing the request. Please retry."},
+    )
+
+
 # Register routers
 app.include_router(health_router)
 app.include_router(conversation_router)
@@ -48,7 +60,7 @@ def get_root():
         "service": settings.APP_NAME,
         "tagline": settings.APP_TAGLINE,
         "version": settings.APP_VERSION,
-        "phase": "Phase 4 - Persistence Layer & LocalStack Integration",
+        "phase": "Phase 7 - Polish, Verification & Production Hardening",
         "status": "operational",
         "disclaimer": settings.DISCLAIMER,
         "endpoints": {

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 
 class AuditEvent(BaseModel):
-    """Immutable record of an authorization decision or workflow event."""
+    """Append-only application audit record of an authorization decision or workflow event."""
 
     event_id: str = Field(default_factory=lambda: f"evt-{uuid.uuid4().hex[:12]}")
     case_id: Optional[str] = None
@@ -21,6 +21,7 @@ class AuditEvent(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     principal_id: str
     principal_role: str
+    principal_department: Optional[str] = None
     action: str
     resource_id: str
     resource_type: str = "CivicCase"
@@ -107,6 +108,7 @@ class AuditDispatcher:
             event_type=event_type,
             principal_id=p_id,
             principal_role=p_role,
+            principal_department=dept,
             action=action or event_type,
             resource_id=case_id,
             resource_type="CivicCase",

@@ -31,10 +31,11 @@ from app.services.persistence.interface import (
 
 
 def sanitize_filename(filename: str) -> str:
-    """Sanitize filename to prevent directory traversal or invalid characters."""
-    base = os.path.basename(filename)
-    # Strip any non-alphanumeric chars except dots, dashes, underscores
+    """Sanitize filename to prevent directory traversal or invalid characters across platforms."""
+    normalized = filename.replace("\\", "/").rstrip("/")
+    base = normalized.split("/")[-1]
     clean = re.sub(r"[^a-zA-Z0-9._-]", "_", base)
+    clean = clean.lstrip(".")  # Prevent hidden files
     return clean or "evidence_file"
 
 
@@ -156,11 +157,20 @@ class LocalCaseRepository(CaseRepository):
         new_status: CaseStatus,
         note: Optional[str] = None,
         actor_label: Optional[str] = None,
+        expected_current_status: Optional[CaseStatus] = None,
     ) -> Optional[CivicCaseRecord]:
         with self._lock:
             record = self._cases.get(case_id)
             if not record:
                 return None
+            if expected_current_status is not None and record.status != expected_current_status:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"Concurrent modification conflict: case status is currently '{record.status.value}', "
+                        f"expected '{expected_current_status.value}'."
+                    ),
+                )
             record.status = new_status
             record.updated_at = datetime.now(timezone.utc)
             if note:

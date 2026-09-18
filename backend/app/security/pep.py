@@ -69,6 +69,7 @@ class PolicyEnforcementPoint:
             case_id=resource_id if resource_type == "CivicCase" else None,
             principal_id=principal.principal_id,
             principal_role=principal.role.value,
+            principal_department=principal.department,
             action=action.value if isinstance(action, CivicAction) else str(action),
             resource_id=resource_id,
             resource_type=resource_type,

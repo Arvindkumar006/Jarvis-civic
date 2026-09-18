@@ -29,35 +29,38 @@ def get_current_principal(
     WARNING: This is strictly a local development/test identity mechanism.
     Production identity verification and authentication will be implemented in later phases.
     """
-    effective_id = x_principal_id or x_simulated_id
-    effective_role = x_principal_role or x_simulated_role
-    effective_dept = x_principal_department or x_simulated_department
+    raw_id = (x_principal_id or x_simulated_id or "").strip()
+    raw_role = (x_principal_role or x_simulated_role or "").strip()
+    raw_dept = (x_principal_department or x_simulated_department or "").strip()
 
-    # 1. No identity headers provided -> Default strictly to PUBLIC
-    if not effective_id or not effective_role:
+    # 1. No identity headers or empty strings provided -> Default strictly to PUBLIC
+    if not raw_id or not raw_role:
         return ApplicationPrincipal(
             principal_id="anonymous-public-user",
             role=ApplicationRole.PUBLIC,
             department=None,
         )
 
-    # 2. Validate role
-    role_str = effective_role.strip().upper()
+    # 2. Validate role safely
+    role_str = raw_role.upper()
     try:
         role = ApplicationRole(role_str)
     except ValueError:
-        # Invalid role string -> Degrade safely to PUBLIC (never grant elevated privileges)
+        # Invalid or unmapped role string -> Degrade safely to PUBLIC (never grant elevated privileges)
         return ApplicationPrincipal(
-            principal_id=effective_id.strip(),
+            principal_id=raw_id[:64] if raw_id else "anonymous-public-user",
             role=ApplicationRole.PUBLIC,
             department=None,
         )
 
-    # 3. Clean department if authority role
-    clean_dept = effective_dept.strip() if effective_dept else None
+    # 3. Department isolation: Citizen and Public cannot possess an authority department scope
+    if role in (ApplicationRole.PUBLIC, ApplicationRole.CITIZEN):
+        clean_dept = None
+    else:
+        clean_dept = raw_dept[:128] if raw_dept else None
 
     return ApplicationPrincipal(
-        principal_id=effective_id.strip(),
+        principal_id=raw_id[:64],
         role=role,
         department=clean_dept,
     )

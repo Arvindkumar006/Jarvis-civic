@@ -169,24 +169,32 @@ def update_case_status(
     validate_status_transition(case.status, payload.status)
 
     prev_status = case.status.value
-    # 4. Mutate persistent store
+    expected_status = case.status
+    # 4. Mutate persistent store with concurrency safeguard
     updated = case_store.update_case_status(
         case_id=case_id,
         new_status=payload.status,
         note=payload.note,
         actor_label=principal.role.value,
+        expected_current_status=expected_status,
     )
 
-    # 5. Record workflow audit event
-    audit_dispatcher.record_workflow_event(
-        case_id=case_id,
-        event_type="STATUS_TRANSITION",
-        previous_status=prev_status,
-        new_status=payload.status.value,
-        principal=principal,
-        outcome="SUCCESS",
-        metadata={"note": payload.note} if payload.note else {},
-    )
+    # 5. Record append-only workflow audit event
+    try:
+        audit_dispatcher.record_workflow_event(
+            case_id=case_id,
+            event_type="STATUS_TRANSITION",
+            previous_status=prev_status,
+            new_status=payload.status.value,
+            principal=principal,
+            outcome="SUCCESS",
+            metadata={"note": payload.note} if payload.note else {},
+        )
+    except Exception as audit_err:
+        import logging
+        logging.getLogger("jarvis.api.cases").critical(
+            "Audit event recording failed after status transition on case %s: %s", case_id, audit_err
+        )
 
     return updated or case
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Building2, MapPin, AlertCircle, ShieldAlert, Check, ArrowRight, Paperclip, AlertTriangle } from 'lucide-react';
 import { CanonicalCivicState, CivicCaseCreateRequest, ControlledDepartment } from '../../types/civic';
 import './ActionDocketModal.css';
@@ -18,6 +18,17 @@ export const ActionDocketModal: React.FC<ActionDocketModalProps> = ({
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Accessibility: Close modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen || !state) return null;
 

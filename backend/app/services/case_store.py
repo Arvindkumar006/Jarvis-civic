@@ -74,10 +74,15 @@ class CaseServiceFacade:
         new_status: CaseStatus,
         note: Optional[str] = None,
         actor_label: Optional[str] = None,
+        expected_current_status: Optional[CaseStatus] = None,
     ) -> Optional[CivicCaseRecord]:
         """Update case lifecycle status."""
         return self._case_repo.update_case_status(
-            case_id, new_status=new_status, note=note, actor_label=actor_label
+            case_id,
+            new_status=new_status,
+            note=note,
+            actor_label=actor_label,
+            expected_current_status=expected_current_status,
         )
 
     def add_resolution_note(

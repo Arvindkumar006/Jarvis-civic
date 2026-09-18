@@ -139,7 +139,7 @@ const PIPELINE_STAGES: PipelineStage[] = [
     step: '06',
     title: 'DOCKET',
     badge: 'STRUCTURED RECORD',
-    summary: 'Synthesizes an immutable, AI-generated Civic Action Docket.',
+    summary: 'Synthesizes a structured, AI-generated Civic Action Docket.',
     telemetry: {
       raw: 'DOCKET REF: NS-CHN-2026-821F',
       extracted: 'STATUS: DOCKET CREATED • CEDAR POLICY VALIDATED',
@@ -325,7 +325,7 @@ const TECH_STACK_ITEMS: TechItem[] = [
   {
     name: 'LocalStack DynamoDB',
     tag: 'CASE PERSISTENCE',
-    role: 'Emulates AWS DynamoDB locally with conditional puts to enforce idempotency and immutable audit logs.',
+    role: 'Emulates AWS DynamoDB locally with conditional puts to enforce idempotency and append-only audit logs.',
     category: 'PERSISTENCE',
   },
   {

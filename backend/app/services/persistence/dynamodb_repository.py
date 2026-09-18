@@ -168,10 +168,24 @@ class DynamoDBCaseRepository(CaseRepository):
         new_status: CaseStatus,
         note: Optional[str] = None,
         actor_label: Optional[str] = None,
+        expected_current_status: Optional[CaseStatus] = None,
     ) -> Optional[CivicCaseRecord]:
         record = self.get_case(case_id)
         if not record:
             return None
+
+        condition = "attribute_exists(case_id)"
+        expr_values: Dict[str, Any] = {}
+        expr_names: Dict[str, str] = {}
+
+        if expected_current_status is not None:
+            condition += " AND #st = :expected_st"
+            expr_names["#st"] = "status"
+            expr_values[":expected_st"] = (
+                expected_current_status.value
+                if isinstance(expected_current_status, CaseStatus)
+                else str(expected_current_status)
+            )
 
         record.status = new_status
         record.updated_at = datetime.now(timezone.utc)
@@ -179,13 +193,25 @@ class DynamoDBCaseRepository(CaseRepository):
             record.resolution_notes.append(note)
 
         item = case_record_to_dynamodb(record)
+        put_kwargs: Dict[str, Any] = {
+            "Item": item,
+            "ConditionExpression": condition,
+        }
+        if expr_names:
+            put_kwargs["ExpressionAttributeNames"] = expr_names
+        if expr_values:
+            put_kwargs["ExpressionAttributeValues"] = expr_values
+
         try:
-            self.table.put_item(
-                Item=item,
-                ConditionExpression="attribute_exists(case_id)",
-            )
+            self.table.put_item(**put_kwargs)
             return record
         except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                from fastapi import HTTPException, status as http_status
+                raise HTTPException(
+                    status_code=http_status.HTTP_409_CONFLICT,
+                    detail="Concurrent modification conflict: case status has been modified by another operation.",
+                )
             logger.error("DynamoDB update_case_status failed for '%s': %s", case_id, exc)
             raise
 

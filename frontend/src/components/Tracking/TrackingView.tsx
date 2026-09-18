@@ -132,6 +132,17 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
     }
   }, [initialCaseId]);
 
+  // Accessibility: Close transition confirmation modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && confirmModalOpen) {
+        setConfirmModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [confirmModalOpen]);
+
   // Adjust simulated defaults when role changes
   const handleRoleChange = (newRole: ApplicationRole) => {
     setSimulatedRole(newRole);
@@ -1096,11 +1107,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
 
       {/* CONFIRMATION MODAL FOR STATUS ADVANCE */}
       {confirmModalOpen && nextTransition && (
-        <div className="confirm-dialog-overlay" role="dialog" aria-modal="true">
+        <div className="confirm-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-transition-title">
           <div className="confirm-dialog-box crosshair-corner animate-fade-in">
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Building2 size={18} color="var(--civic-amber)" />
-              <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+              <h3 id="confirm-transition-title" style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>
                 Confirm Lifecycle Transition
               </h3>
             </div>
@@ -1111,7 +1122,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
               <strong style={{ color: 'var(--civic-amber)' }}>
                 {nextTransition.nextStatus.replace(/_/g, ' ')}
               </strong>
-              ? This action will be immutably recorded in the Cedar-protected audit trail.
+              ? This action will be recorded in the Cedar-protected append-only audit trail.
             </div>
 
             <div className="sim-field-group">

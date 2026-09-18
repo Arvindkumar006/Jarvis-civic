@@ -97,8 +97,8 @@ export function useVoiceInput(onTranscriptReady?: (transcript: string) => void) 
 
     try {
       setTranscript('');
-      setErrorMessage(null);
-      recognitionRef.current.lang = selectedLocale.code;
+      const langTag = selectedLocale.code === 'hinglish' ? 'en-IN' : selectedLocale.code;
+      recognitionRef.current.lang = langTag;
       recognitionRef.current.start();
       setVoiceState('LISTENING');
     } catch {

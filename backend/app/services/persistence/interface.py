@@ -50,8 +50,10 @@ class CaseRepository(ABC):
         case_id: str,
         new_status: CaseStatus,
         note: Optional[str] = None,
+        actor_label: Optional[str] = None,
+        expected_current_status: Optional[CaseStatus] = None,
     ) -> Optional[CivicCaseRecord]:
-        """Update case lifecycle status and append transition note."""
+        """Update case lifecycle status, append transition note, and enforce concurrency state."""
         pass
 
     @abstractmethod

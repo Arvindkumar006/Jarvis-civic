@@ -494,7 +494,7 @@ export const EvidenceStudio: React.FC<EvidenceStudioProps> = ({ initialCaseId = 
               <span className="node-step">06</span>
               <div>
                 <strong>Civic Record</strong>
-                <p>Immutable evidence metadata attached to docket</p>
+                <p>Verified evidence metadata attached to docket</p>
               </div>
             </div>
           </div>
