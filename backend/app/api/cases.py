@@ -6,10 +6,11 @@ before performing case operations.
 """
 
 from typing import Any, List, Optional, Union
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
 from app.config.settings import settings
 from app.models.enums import CaseStatus, validate_status_transition
+from app.models.evidence import EvidenceResponse, EvidenceType
 from app.models.security import (
     ApplicationPrincipal,
     ApplicationRole,
@@ -29,6 +30,7 @@ from app.security.audit import audit_dispatcher
 from app.security.pep import pep
 from app.security.principals import get_current_principal
 from app.services.case_store import case_store
+from app.services.evidence_verification_service import evidence_verification_service
 from app.services.notifications import notification_service
 from app.services.notifications.worker_dispatcher import worker_dispatcher
 from app.services.search.opensearch_service import opensearch_service
@@ -376,33 +378,41 @@ def get_case_history(
     ]
 
 
-@router.post("/{case_id}/evidence", response_model=EvidenceMetadata, status_code=status.HTTP_201_CREATED)
+@router.post("/{case_id}/evidence", response_model=EvidenceResponse, status_code=status.HTTP_201_CREATED)
 async def upload_case_evidence(
     case_id: str,
     file: UploadFile = File(...),
+    evidence_type: EvidenceType = Form(EvidenceType.CASE_EVIDENCE),
+    resolution_attempt: Optional[str] = Form(None),
     principal: ApplicationPrincipal = Depends(get_current_principal),
-) -> EvidenceMetadata:
-    """Upload and attach evidence to a civic case.
+) -> EvidenceResponse:
+    """Upload, verify, and attach evidence to a civic case.
 
     CRITICAL SECURITY & EXECUTION ORDER:
     1. Resolve case record
-    2. Cedar authorization (action: add_evidence)
+    2. Cedar authorization (action: add_evidence vs add_resolution_evidence)
     3. ALLOW from Cedar PEP (DENY halts with HTTP 403)
     4. Bounded streaming read (reject oversized uploads before buffering arbitrary data in memory)
-    5. Validate file (size <= 10MB, non-empty, allowed extension/MIME, magic byte signatures, sanitize filename)
-    6. Upload to S3 evidence repository
-    7. Attach URI to case record in persistence store
-    8. Record append-only audit event
+    5. Deterministic validation (magic bytes, MIME, SHA-256)
+    6. Secure persistence
+    7. Advisory AI assessment
+    8. Trusted server-side record creation
+    9. Append-only audit event
+    10. Notification dispatch
     """
-    # 1. Resolve case
     case = case_store.get_case(case_id)
     if not case:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
-    # 2. Enforce Cedar authorization BEFORE any storage action
+    # Enforce Cedar authorization BEFORE streaming or buffering file
+    action = (
+        CivicAction.ADD_RESOLUTION_EVIDENCE
+        if evidence_type == EvidenceType.RESOLUTION_EVIDENCE
+        else CivicAction.ADD_EVIDENCE
+    )
     pep.enforce(
         principal=principal,
-        action=CivicAction.ADD_EVIDENCE,
+        action=action,
         resource_id=case.case_id,
         resource_type="CivicCase",
         resource_owner=case.owner_id,
@@ -411,7 +421,7 @@ async def upload_case_evidence(
         is_public=case.is_public,
     )
 
-    # 3. Bounded streaming read (reject oversized uploads before buffering arbitrary data in memory)
+    # Bounded streaming read (reject oversized uploads before buffering arbitrary data in memory)
     max_bytes = settings.MAX_EVIDENCE_SIZE_BYTES
     chunk_size = 1024 * 1024  # 1MB chunks
     chunks = []
@@ -433,38 +443,24 @@ async def upload_case_evidence(
     filename = file.filename or "evidence_attachment.jpg"
     content_type = file.content_type or "image/jpeg"
 
-    # 4. Upload to S3 evidence repository (includes magic byte and extension validation)
-    metadata = case_store.evidence_repo.upload_evidence(
+    return evidence_verification_service.verify_and_store_evidence(
         case_id=case_id,
+        principal=principal,
         file_bytes=file_bytes,
         filename=filename,
         content_type=content_type,
+        evidence_type=evidence_type,
+        resolution_attempt=resolution_attempt,
     )
 
-    # 5. Attach URI to case
-    case_store.add_evidence_uri(case_id, metadata.s3_uri)
 
-    # 6. Dispatch workflow audit event
-    audit_dispatcher.record_workflow_event(
-        case_id=case_id,
-        event_type="EVIDENCE_ATTACHED",
-        previous_status=case.status.value,
-        new_status=case.status.value,
-        principal=principal,
-        outcome="SUCCESS",
-        metadata={"filename": metadata.filename, "size_bytes": metadata.size_bytes},
-    )
-
-    # 7. Dispatch evidence available notification
-    try:
-        worker_dispatcher.dispatch_evidence_uploaded(case, metadata)
-    except Exception as notif_err:
-        import logging
-        logging.getLogger("jarvis.api.cases").critical(
-            "Notification evidence dispatch exception on case %s: %s", case_id, notif_err
-        )
-
-    return metadata
+@router.get("/{case_id}/evidence", response_model=List[EvidenceResponse])
+def list_case_evidence(
+    case_id: str,
+    principal: ApplicationPrincipal = Depends(get_current_principal),
+) -> List[EvidenceResponse]:
+    """Retrieve verified evidence records for a case, authorized by Cedar READ_EVIDENCE."""
+    return evidence_verification_service.list_case_evidence(case_id=case_id, principal=principal)
 
 
 @router.get("/{case_id}/notifications", response_model=List[SanitizedNotificationItem])

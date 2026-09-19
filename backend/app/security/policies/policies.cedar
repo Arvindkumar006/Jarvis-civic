@@ -30,7 +30,8 @@ permit(
     action in [
         JarvisCivic::Action::"read_own_case",
         JarvisCivic::Action::"update_own_case",
-        JarvisCivic::Action::"add_evidence"
+        JarvisCivic::Action::"add_evidence",
+        JarvisCivic::Action::"read_evidence"
     ],
     resource
 )
@@ -39,7 +40,7 @@ when {
 };
 
 // POLICY D — Authority Officer Scope
-// Authority officers can read, update status, add resolution notes, and attach evidence only within their assigned department
+// Authority officers can read, update status, add resolution notes, attach evidence, and add resolution evidence only within their assigned department
 @id("policy_authority_officer_scope")
 permit(
     principal is JarvisCivic::AuthorityOfficer,
@@ -47,7 +48,9 @@ permit(
         JarvisCivic::Action::"read_authority_case",
         JarvisCivic::Action::"update_case_status",
         JarvisCivic::Action::"add_resolution_note",
-        JarvisCivic::Action::"add_evidence"
+        JarvisCivic::Action::"add_evidence",
+        JarvisCivic::Action::"add_resolution_evidence",
+        JarvisCivic::Action::"read_evidence"
     ],
     resource
 )
@@ -56,7 +59,7 @@ when {
 };
 
 // POLICY E — Municipal Supervisor Scope
-// Supervisors can manage cases, add evidence, and inspect audit records within their department scope
+// Supervisors can manage cases, add evidence, add resolution evidence, read evidence, and inspect audit records within their department scope
 @id("policy_supervisor_scope")
 permit(
     principal is JarvisCivic::MunicipalSupervisor,
@@ -64,7 +67,9 @@ permit(
         JarvisCivic::Action::"read_authority_case",
         JarvisCivic::Action::"update_case_status",
         JarvisCivic::Action::"add_resolution_note",
-        JarvisCivic::Action::"add_evidence"
+        JarvisCivic::Action::"add_evidence",
+        JarvisCivic::Action::"add_resolution_evidence",
+        JarvisCivic::Action::"read_evidence"
     ],
     resource
 )

@@ -15,13 +15,19 @@ import {
   Lock,
 } from 'lucide-react';
 import { evidenceApi } from '../../services/api';
-import { EvidenceMetadata, ApplicationRole } from '../../types/civic';
+import {
+  ApplicationRole,
+  CivicEvidenceType,
+  EvidenceMetadata,
+  EvidenceResponse,
+  VerificationOutcome,
+} from '../../types/civic';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import './EvidenceUpload.css';
 
 interface EvidenceStudioProps {
   initialCaseId?: string;
-  onSuccess?: (metadata: EvidenceMetadata) => void;
+  onSuccess?: (metadata: EvidenceResponse | EvidenceMetadata) => void;
 }
 
 type UploadState = 'READY' | 'UPLOADING' | 'STORED' | 'FAILED';
@@ -32,7 +38,7 @@ interface StagedEvidenceItem {
   previewUrl: string | null;
   fileCategory: 'image' | 'audio' | 'document';
   state: UploadState;
-  metadata?: EvidenceMetadata;
+  metadata?: EvidenceResponse | EvidenceMetadata;
   error?: string;
 }
 
@@ -42,10 +48,12 @@ const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.pdf', '.mp3', '.wav', '.t
 export const EvidenceStudio: React.FC<EvidenceStudioProps> = ({ initialCaseId = '', onSuccess }) => {
   const { session } = useWorkspace();
   const [caseId, setCaseId] = useState(initialCaseId);
+  const [evidenceType, setEvidenceType] = useState<CivicEvidenceType>(CivicEvidenceType.CASE_EVIDENCE);
+  const [resolutionAttempt, setResolutionAttempt] = useState<string>('');
   const [stagedFiles, setStagedFiles] = useState<StagedEvidenceItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [uploadedEvidence, setUploadedEvidence] = useState<EvidenceMetadata[]>([]);
+  const [uploadedEvidence, setUploadedEvidence] = useState<(EvidenceResponse | EvidenceMetadata)[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync initialCaseId when changed
@@ -142,7 +150,9 @@ export const EvidenceStudio: React.FC<EvidenceStudioProps> = ({ initialCaseId = 
         item.file,
         session.role,
         session.principalId,
-        session.department
+        session.department,
+        evidenceType,
+        resolutionAttempt.trim() || undefined
       );
       setStagedFiles((prev) =>
         prev.map((f) => (f.id === itemId ? { ...f, state: 'STORED', metadata } : f))
@@ -210,6 +220,66 @@ export const EvidenceStudio: React.FC<EvidenceStudioProps> = ({ initialCaseId = 
         </div>
       </div>
 
+      {/* Evidence Purpose for Authority Roles */}
+      {(session.role === ApplicationRole.AUTHORITY_OFFICER ||
+        session.role === ApplicationRole.MUNICIPAL_SUPERVISOR ||
+        session.role === ApplicationRole.ADMINISTRATOR) && (
+        <div className="evidence-type-bar" style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
+          <span className="technical-label" style={{ minWidth: '100px' }}>EVIDENCE PURPOSE:</span>
+          <button
+            type="button"
+            className={`btn-stage-type ${evidenceType === CivicEvidenceType.CASE_EVIDENCE ? 'active' : ''}`}
+            onClick={() => setEvidenceType(CivicEvidenceType.CASE_EVIDENCE)}
+            style={{
+              padding: '4px 10px',
+              fontSize: '11px',
+              background: evidenceType === CivicEvidenceType.CASE_EVIDENCE ? 'rgba(6,182,212,0.2)' : 'transparent',
+              color: evidenceType === CivicEvidenceType.CASE_EVIDENCE ? '#06b6d4' : '#94a3b8',
+              border: '1px solid #334155',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            DOCKET EVIDENCE
+          </button>
+          <button
+            type="button"
+            className={`btn-stage-type ${evidenceType === CivicEvidenceType.RESOLUTION_EVIDENCE ? 'active' : ''}`}
+            onClick={() => setEvidenceType(CivicEvidenceType.RESOLUTION_EVIDENCE)}
+            style={{
+              padding: '4px 10px',
+              fontSize: '11px',
+              background: evidenceType === CivicEvidenceType.RESOLUTION_EVIDENCE ? 'rgba(16,185,129,0.2)' : 'transparent',
+              color: evidenceType === CivicEvidenceType.RESOLUTION_EVIDENCE ? '#10b981' : '#94a3b8',
+              border: '1px solid #334155',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            RESOLUTION EVIDENCE
+          </button>
+          {evidenceType === CivicEvidenceType.RESOLUTION_EVIDENCE && (
+            <input
+              type="text"
+              placeholder="Resolution Reference / Attempt ID"
+              value={resolutionAttempt}
+              onChange={(e) => setResolutionAttempt(e.target.value)}
+              style={{
+                background: '#0f172a',
+                border: '1px solid #334155',
+                color: '#f8fafc',
+                fontSize: '11px',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                marginLeft: '8px',
+                flex: 1,
+                minWidth: '180px',
+              }}
+            />
+          )}
+        </div>
+      )}
+
       {errorMessage && (
         <div className="evidence-error-strip" role="alert">
           <AlertCircle size={14} />
@@ -268,12 +338,40 @@ export const EvidenceStudio: React.FC<EvidenceStudioProps> = ({ initialCaseId = 
                         <span>Ownership ✓</span>
                       </span>
                       {item.state === 'STORED' && (
-                        <span className="card-sec-badge stored">
-                          <CheckCircle2 size={10} color="var(--civic-emerald)" />
-                          <span>S3 ✓</span>
-                        </span>
+                        <>
+                          <span className="card-sec-badge stored">
+                            <CheckCircle2 size={10} color="var(--civic-emerald)" />
+                            <span>S3 ✓</span>
+                          </span>
+                          {item.metadata && 'verification_status' in item.metadata && (
+                            <span
+                              className="card-sec-badge"
+                              style={{
+                                color:
+                                  (item.metadata as any).verification_status === 'VERIFIED'
+                                    ? 'var(--civic-emerald, #10b981)'
+                                    : (item.metadata as any).verification_status === 'LIKELY_VERIFIED'
+                                    ? 'var(--civic-cyan, #06b6d4)'
+                                    : (item.metadata as any).verification_status === 'REJECTED'
+                                    ? '#f43f5e'
+                                    : '#f59e0b',
+                                borderColor: 'currentColor',
+                              }}
+                              title="Advisory AI-assisted evidence assessment"
+                            >
+                              <span>{(item.metadata as any).verification_status}</span>
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
+
+                    {item.state === 'STORED' && item.metadata && 'verification_status' in item.metadata && (
+                      <div className="verification-assessment-note" style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--civic-cyan, #06b6d4)' }}>AI-assisted evidence assessment:</span>{' '}
+                        {(item.metadata as any).verification_reason || 'Verified against case context.'}
+                      </div>
+                    )}
 
                     {item.error && <div className="staged-err-text">{item.error}</div>}
 

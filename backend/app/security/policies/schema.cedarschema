@@ -71,6 +71,16 @@ namespace JarvisCivic {
         resource: [CivicCase]
     };
 
+    action add_resolution_evidence appliesTo {
+        principal: [AuthorityOfficer, MunicipalSupervisor, Administrator],
+        resource: [CivicCase]
+    };
+
+    action read_evidence appliesTo {
+        principal: [Citizen, AuthorityOfficer, MunicipalSupervisor, Administrator],
+        resource: [CivicCase]
+    };
+
     action read_audit_log appliesTo {
         principal: [MunicipalSupervisor, Administrator],
         resource: [AuditRecord]

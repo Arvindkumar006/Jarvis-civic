@@ -182,6 +182,37 @@ export interface CivicCaseRecord {
   updated_at: string;
 }
 
+export enum CivicEvidenceType {
+  CASE_EVIDENCE = 'CASE_EVIDENCE',
+  RESOLUTION_EVIDENCE = 'RESOLUTION_EVIDENCE',
+}
+
+export enum VerificationOutcome {
+  VERIFIED = 'VERIFIED',
+  LIKELY_VERIFIED = 'LIKELY_VERIFIED',
+  UNCERTAIN = 'UNCERTAIN',
+  REJECTED = 'REJECTED',
+}
+
+export interface EvidenceResponse {
+  evidence_id: string;
+  case_id: string;
+  evidence_type: CivicEvidenceType;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  sha256: string;
+  validation_status: string;
+  verification_status: VerificationOutcome;
+  verification_reason: string;
+  ai_confidence?: number | null;
+  resolution_attempt?: string | null;
+  object_key?: string | null;
+  s3_uri?: string | null;
+  created_at: string;
+  verified_at?: string | null;
+}
+
 export interface EvidenceMetadata {
   evidence_id: string;
   case_id: string;

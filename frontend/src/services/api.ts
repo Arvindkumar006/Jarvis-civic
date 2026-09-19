@@ -8,9 +8,11 @@ import {
   CaseHistoryItem,
   CivicCaseCreateRequest,
   CivicCaseRecord,
+  CivicEvidenceType,
   ConversationRequest,
   ConversationResponse,
   EvidenceMetadata,
+  EvidenceResponse,
   PublicTrackingProjection,
   ResolutionNoteRequest,
   StatusTransitionRequest,
@@ -315,18 +317,24 @@ export const auditApi = {
 export const evidenceApi = {
   /**
    * Upload and attach evidence to a civic case.
-   * Protected by Cedar (Action: add_evidence).
+   * Protected by Cedar (Action: add_evidence vs add_resolution_evidence).
    */
   async uploadEvidence(
     caseId: string,
     file: File,
     role?: string,
     principalId?: string,
-    dept?: string
-  ): Promise<EvidenceMetadata> {
+    dept?: string,
+    evidenceType: CivicEvidenceType = CivicEvidenceType.CASE_EVIDENCE,
+    resolutionAttempt?: string
+  ): Promise<EvidenceResponse> {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('evidence_type', evidenceType);
+      if (resolutionAttempt) {
+        formData.append('resolution_attempt', resolutionAttempt);
+      }
 
       const simHeaders = buildSimulatedHeaders(role, principalId, dept);
       const headers: Record<string, string> = {
@@ -341,10 +349,27 @@ export const evidenceApi = {
         credentials: 'include',
         body: formData,
       });
-      return await handleResponse<EvidenceMetadata>(res);
+      return await handleResponse<EvidenceResponse>(res);
     } catch (err: unknown) {
       if (err instanceof ApiError) throw err;
       throw new ApiError('Evidence upload failed due to network error.', 0);
+    }
+  },
+
+  /**
+   * Retrieve verified evidence records for a case.
+   * Protected by Cedar (Action: read_evidence).
+   */
+  async listEvidence(caseId: string): Promise<EvidenceResponse[]> {
+    try {
+      const res = await fetch(`${BASE_URL}/api/cases/${encodeURIComponent(caseId)}/evidence`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      return await handleResponse<EvidenceResponse[]>(res);
+    } catch (err: unknown) {
+      if (err instanceof ApiError) throw err;
+      throw new ApiError('Failed to retrieve case evidence.', 0);
     }
   },
 };

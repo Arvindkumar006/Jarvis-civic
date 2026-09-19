@@ -39,6 +39,8 @@ class CivicAction(str, Enum):
     UPDATE_CASE_STATUS = "update_case_status"
     ADD_RESOLUTION_NOTE = "add_resolution_note"
     ADD_EVIDENCE = "add_evidence"
+    ADD_RESOLUTION_EVIDENCE = "add_resolution_evidence"
+    READ_EVIDENCE = "read_evidence"
     READ_AUDIT_LOG = "read_audit_log"
     SEARCH_DOCKETS = "search_dockets"
 
