@@ -1,0 +1,12 @@
+{
+  "event_id": "evt-sam-workflow-stage-001",
+  "event_type": "WORKFLOW_STAGE_CHANGED",
+  "case_id": "NS-CHN-2026-F981",
+  "event_version": 1,
+  "requested_at": "2026-09-19T12:05:00Z",
+  "source": "jarvis-civic",
+  "payload": {
+    "previous_status": "SUBMITTED",
+    "new_status": "IN_PROGRESS"
+  }
+}

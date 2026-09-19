@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  JARVIS Civic — Phase 8.5 Local Serverless Notification / Workflow Worker
+  Serverless execution layer for processing notification work events and
+  dispatching to Mailpit via NotificationService.
+
+Parameters:
+  SmtpHost:
+    Type: String
+    Default: host.docker.internal
+    Description: Hostname for SMTP delivery (host.docker.internal allows Docker container to reach host Mailpit)
+  SmtpPort:
+    Type: Number
+    Default: 1025
+    Description: Port for Mailpit SMTP
+  PersistenceBackend:
+    Type: String
+    Default: local
+    Description: Case and notification persistence backend (local or localstack)
+  Environment:
+    Type: String
+    Default: development
+    Description: Environment stage
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: python3.11
+
+Resources:
+  NotificationWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/notification_worker/
+      Handler: worker.lambda_handler
+      Description: Local serverless worker for asynchronous civic notification dispatching
+      Environment:
+        Variables:
+          SMTP_HOST: !Ref SmtpHost
+          SMTP_PORT: !Ref SmtpPort
+          PERSISTENCE_BACKEND: !Ref PersistenceBackend
+          ENVIRONMENT: !Ref Environment
+          PYTHONPATH: /var/task:/var/task/backend
+
+Outputs:
+  NotificationWorkerFunction:
+    Description: Identifier of the notification worker Lambda function
+    Value: !GetAtt NotificationWorkerFunction.Arn

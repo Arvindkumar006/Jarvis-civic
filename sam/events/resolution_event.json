@@ -1,0 +1,11 @@
+{
+  "event_id": "evt-sam-resolution-001",
+  "event_type": "RESOLUTION_READY",
+  "case_id": "NS-CHN-2026-F981",
+  "event_version": 1,
+  "requested_at": "2026-09-19T12:15:00Z",
+  "source": "jarvis-civic",
+  "payload": {
+    "proposed_notes": "Culvert clearing and drain desilting completed by stormwater division crew."
+  }
+}

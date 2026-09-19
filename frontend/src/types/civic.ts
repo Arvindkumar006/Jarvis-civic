@@ -229,3 +229,18 @@ export interface ChatMessage {
     urgency?: string;
   };
 }
+
+export interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+export interface AuthenticatedUser {
+  principal_id: string;
+  email: string;
+  display_name: string;
+  role: ApplicationRole;
+  department?: ControlledDepartment | string | null;
+  is_active: boolean;
+  created_at: string;
+}

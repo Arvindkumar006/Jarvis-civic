@@ -863,53 +863,67 @@
   border-color: rgba(16, 185, 129, 0.4);
 }
 
-/* Simulated Actor Console (Test / Simulation Mode) */
-.simulation-control-strip {
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-left: 3px solid var(--civic-amber);
+/* Compact Workspace Identity Strip (Inherited from Workspace) */
+.workspace-identity-strip {
+  background: rgba(18, 22, 31, 0.7);
+  border: 1px solid var(--border-base);
+  border-left: 3px solid var(--civic-cyan);
   border-radius: var(--radius-xs);
-  padding: 0.85rem 1rem;
-  margin-bottom: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.simulation-top-row {
+  padding: 0.65rem 1rem;
+  margin-bottom: 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
-.simulation-badge {
+.workspace-identity-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.workspace-identity-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--civic-cyan);
+}
+
+.identity-role-label {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.identity-dept-label {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--civic-amber);
+  font-weight: 700;
+}
+
+.identity-pid-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--civic-cyan);
+}
+
+.identity-security-pill {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   font-family: var(--font-mono);
   font-size: 0.68rem;
   font-weight: 700;
-  color: var(--civic-amber);
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  padding: 0.2rem 0.55rem;
+  color: var(--civic-emerald);
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 0.2rem 0.5rem;
   border-radius: 2px;
-  letter-spacing: 0.05em;
-}
-
-.simulation-notice {
-  font-size: 0.72rem;
-  color: var(--text-dim);
-  font-style: italic;
-}
-
-.simulation-fields-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.65rem;
-  align-items: end;
 }
 
 .sim-field-group {

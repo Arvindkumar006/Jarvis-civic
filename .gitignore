@@ -22,6 +22,7 @@ wheels/
 *.egg
 .pytest_cache/
 .coverage
+coverage/
 htmlcov/
 .venv
 venv/
@@ -48,3 +49,24 @@ Thumbs.db
 # Storage / Artifacts
 storage/
 *.log
+.aws-sam/
+scratch/
+*.dist-info/
+
+# SAM Local Packaging Vendored Dependencies
+sam/src/notification_worker/bin/
+sam/src/notification_worker/pydantic*/
+sam/src/notification_worker/fastapi*/
+sam/src/notification_worker/starlette*/
+sam/src/notification_worker/cedarpy*/
+sam/src/notification_worker/cffi*/
+sam/src/notification_worker/argon2*/
+sam/src/notification_worker/anyio*/
+sam/src/notification_worker/annotated_*/
+sam/src/notification_worker/idna*/
+sam/src/notification_worker/pycparser*/
+sam/src/notification_worker/python_dotenv*/
+sam/src/notification_worker/dotenv*/
+sam/src/notification_worker/typing_*/
+sam/src/notification_worker/_argon2*/
+sam/src/notification_worker/typing_extensions.py

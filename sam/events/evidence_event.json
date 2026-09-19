@@ -1,0 +1,12 @@
+{
+  "event_id": "evt-sam-evidence-001",
+  "event_type": "EVIDENCE_AVAILABLE",
+  "case_id": "NS-CHN-2026-F981",
+  "event_version": 1,
+  "requested_at": "2026-09-19T12:10:00Z",
+  "source": "jarvis-civic",
+  "payload": {
+    "file_id": "art-ev-001",
+    "file_name": "site_photo_drainage.jpg"
+  }
+}

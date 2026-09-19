@@ -8,6 +8,64 @@
   z-index: 1;
 }
 
+/* App Bootstrap Loading Screen */
+.app-bootstrap-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #06090e;
+  padding: 2rem;
+}
+
+.bootstrap-loader-box {
+  background: #0a0f16;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 25px rgba(0, 240, 255, 0.1);
+  padding: 2rem 2.5rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  max-width: 520px;
+}
+
+.bootstrap-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(0, 240, 255, 0.15);
+  border-top-color: var(--civic-cyan, #00f0ff);
+  border-radius: 50%;
+  animation: spinLoader 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spinLoader {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.bootstrap-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.bootstrap-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.bootstrap-sub {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
 .main-viewport {
   flex: 1;
   width: 100%;

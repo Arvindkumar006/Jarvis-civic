@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Navbar, ActiveTab } from './components/Layout/Navbar';
 import { ProductExperience } from './components/Experience/ProductExperience';
 import { ConversationStudio } from './components/Conversation/ConversationStudio';
@@ -7,14 +7,19 @@ import { VoiceStudio } from './components/VoiceStudio/VoiceStudio';
 import { ActionDocketModal } from './components/Docket/ActionDocketModal';
 import { EvidenceStudio } from './components/Evidence/EvidenceStudio';
 import { TrackingView } from './components/Tracking/TrackingView';
+import { AuthorityConsole } from './components/Authority/AuthorityConsole';
 import { CivicMap } from './components/Map/CivicMap';
 import {
   CanonicalCivicState,
   ChatMessage,
   CivicCaseCreateRequest,
   CivicCaseRecord,
+  ApplicationRole,
 } from './types/civic';
 import { conversationApi, casesApi, healthApi } from './services/api';
+import { WorkspaceProvider, useWorkspace } from './context/WorkspaceContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { LoginModal } from './components/Auth/LoginModal';
 import { CheckCircle2, Search, Paperclip, Mic, ArrowRight, MapPin, Sparkles } from 'lucide-react';
 import './App.css';
 
@@ -49,13 +54,94 @@ const COMPACT_ISSUE_SIGNALS: QuickPromptSignal[] = [
   },
 ];
 
-export const App: React.FC = () => {
-  // Navigation & View state (Default to report, accessible to experience via brand)
-  const [activeTab, setActiveTab] = useState<ActiveTab>('report');
+const AppContent: React.FC = () => {
+  const { session } = useWorkspace();
+
+  let auth: ReturnType<typeof useAuth> | null = null;
+  try {
+    auth = useAuth();
+  } catch {
+    auth = null;
+  }
+
+  const isAuthenticated = auth ? auth.isAuthenticated : session.role !== ApplicationRole.PUBLIC;
+  const role = auth && auth.isAuthenticated ? auth.role : session.role;
+  const isLoading = auth ? auth.isLoading : false;
+
+  // Navigation & View state (Adaptive default based on role)
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    if (!isAuthenticated) return 'experience';
+    if (role === ApplicationRole.PUBLIC) return 'track';
+    if (
+      role === ApplicationRole.AUTHORITY_OFFICER ||
+      role === ApplicationRole.MUNICIPAL_SUPERVISOR ||
+      role === ApplicationRole.ADMINISTRATOR
+    ) {
+      return 'console';
+    }
+    return 'report';
+  });
+
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
 
+  const prevAuthRoleRef = useRef<string | null>(null);
+
+  // Synchronize and guard tab when authentication or role changes
+  useEffect(() => {
+    if (isLoading) return;
+
+    const currentKey = isAuthenticated ? `${role}` : 'unauth';
+    const roleChanged = prevAuthRoleRef.current !== currentKey;
+    prevAuthRoleRef.current = currentKey;
+
+    if (!isAuthenticated) {
+      if (roleChanged || (activeTab !== 'experience' && activeTab !== 'track')) {
+        setActiveTab('experience');
+      }
+      return;
+    }
+
+    if (roleChanged) {
+      if (role === ApplicationRole.PUBLIC) {
+        setActiveTab('track');
+      } else if (
+        role === ApplicationRole.AUTHORITY_OFFICER ||
+        role === ApplicationRole.MUNICIPAL_SUPERVISOR ||
+        role === ApplicationRole.ADMINISTRATOR
+      ) {
+        setActiveTab('console');
+      } else if (role === ApplicationRole.CITIZEN) {
+        setActiveTab('report');
+      }
+    } else {
+      // Guard forbidden tabs if already settled
+      if (role === ApplicationRole.CITIZEN && (activeTab === 'console' || activeTab === 'audit')) {
+        setActiveTab('report');
+      } else if (
+        (role === ApplicationRole.AUTHORITY_OFFICER ||
+          role === ApplicationRole.MUNICIPAL_SUPERVISOR ||
+          role === ApplicationRole.ADMINISTRATOR) &&
+        activeTab === 'report'
+      ) {
+        setActiveTab('console');
+      }
+    }
+  }, [isLoading, isAuthenticated, role, activeTab]);
+
+  const handleSelectTab = (tab: ActiveTab) => {
+    if (!isAuthenticated && tab !== 'experience' && tab !== 'track') {
+      if (auth) {
+        auth.openLogin();
+      }
+      return;
+    }
+    setActiveTab(tab);
+  };
+
   // Session & Conversation state
-  const [sessionId] = useState<string>(() => `session-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`);
+  const [sessionId] = useState<string>(
+    () => `session-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+  );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [canonicalState, setCanonicalState] = useState<CanonicalCivicState | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -66,7 +152,11 @@ export const App: React.FC = () => {
 
   // Location / Map Confirmation state
   const [confirmedLocation, setConfirmedLocation] = useState<string | null>(null);
-  const [selectedCoordinates, setSelectedCoordinates] = useState<{ lat: number; lng: number; source: 'MAP_SELECTED' } | null>(null);
+  const [selectedCoordinates, setSelectedCoordinates] = useState<{
+    lat: number;
+    lng: number;
+    source: 'MAP_SELECTED';
+  } | null>(null);
 
   // Docket modal & Case creation state
   const [isDocketModalOpen, setIsDocketModalOpen] = useState(false);
@@ -112,7 +202,6 @@ export const App: React.FC = () => {
     });
   }, []);
 
-  // Core conversation submission handler
   // Core text conversation submission handler
   const handleSendMessage = async (text: string) => {
     if (!text.trim() || isProcessing) return;
@@ -151,12 +240,15 @@ export const App: React.FC = () => {
         missingFields: response.state.missing_fields,
         followupQuestion: response.state.followup_question,
         readyForAction: response.state.ready_for_action,
-        structuredDetails: response.state && (response.state.intent || response.state.location) ? {
-          issue: response.state.intent?.replace(/_/g, ' ') || 'Pending analysis',
-          location: response.state.location || 'Awaiting location',
-          department: response.state.department?.replace(/_/g, ' ') || 'Pending routing',
-          urgency: response.state.urgency || 'MEDIUM',
-        } : undefined,
+        structuredDetails:
+          response.state && (response.state.intent || response.state.location)
+            ? {
+                issue: response.state.intent?.replace(/_/g, ' ') || 'Pending analysis',
+                location: response.state.location || 'Awaiting location',
+                department: response.state.department?.replace(/_/g, ' ') || 'Pending routing',
+                urgency: response.state.urgency || 'MEDIUM',
+              }
+            : undefined,
       };
       setMessages((prev) => [...prev, jarvisMsg]);
     } catch (err: any) {
@@ -167,7 +259,11 @@ export const App: React.FC = () => {
   };
 
   // Voice message handler (WhatsApp style)
-  const handleSendVoiceMessage = async (transcriptText: string, durationStr: string, langName: string) => {
+  const handleSendVoiceMessage = async (
+    transcriptText: string,
+    durationStr: string,
+    langName: string
+  ) => {
     if (!transcriptText.trim() || isProcessing) return;
 
     const citizenVoiceMsg: ChatMessage = {
@@ -208,12 +304,15 @@ export const App: React.FC = () => {
         missingFields: response.state.missing_fields,
         followupQuestion: response.state.followup_question,
         readyForAction: response.state.ready_for_action,
-        structuredDetails: response.state && (response.state.intent || response.state.location) ? {
-          issue: response.state.intent?.replace(/_/g, ' ') || 'Pending analysis',
-          location: response.state.location || 'Awaiting location',
-          department: response.state.department?.replace(/_/g, ' ') || 'Pending routing',
-          urgency: response.state.urgency || 'MEDIUM',
-        } : undefined,
+        structuredDetails:
+          response.state && (response.state.intent || response.state.location)
+            ? {
+                issue: response.state.intent?.replace(/_/g, ' ') || 'Pending analysis',
+                location: response.state.location || 'Awaiting location',
+                department: response.state.department?.replace(/_/g, ' ') || 'Pending routing',
+                urgency: response.state.urgency || 'MEDIUM',
+              }
+            : undefined,
       };
       setMessages((prev) => [...prev, jarvisMsg]);
     } catch (err: any) {
@@ -243,10 +342,13 @@ export const App: React.FC = () => {
       is_public: true,
       latitude: payload.latitude ?? selectedCoordinates?.lat ?? null,
       longitude: payload.longitude ?? selectedCoordinates?.lng ?? null,
-      location_source: payload.location_source ?? selectedCoordinates?.source ?? (payload.location ? 'TEXT_REFERENCE' : 'UNCONFIRMED'),
+      location_source:
+        payload.location_source ??
+        selectedCoordinates?.source ??
+        (payload.location ? 'TEXT_REFERENCE' : 'UNCONFIRMED'),
     };
 
-    const newCase = await casesApi.createCase(fullPayload);
+    const newCase = await casesApi.createCase(fullPayload, session.principalId);
     setCreatedCase(newCase);
     saveDocketId(newCase.case_id);
     setIsDocketModalOpen(false);
@@ -264,11 +366,26 @@ export const App: React.FC = () => {
     setActiveTab('track');
   };
 
+  if (isLoading) {
+    return (
+      <div className="app-bootstrap-loader" role="status" aria-label="Initializing security context">
+        <div className="bootstrap-loader-box crosshair-corner">
+          <div className="bootstrap-spinner" />
+          <div className="bootstrap-meta">
+            <span className="technical-label">JARVIS CIVIC // AUTHENTICATING CONTEXT</span>
+            <h2 className="bootstrap-title">Verifying Security Session</h2>
+            <p className="bootstrap-sub">Querying backend session authority via GET /api/auth/me...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <Navbar
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={handleSelectTab}
         backendOnline={backendOnline}
         docketCount={recentDockets.length}
       />
@@ -279,10 +396,33 @@ export const App: React.FC = () => {
           <ProductExperience
             onStartReport={() => setActiveTab('report')}
             onExploreTrack={() => setActiveTab('track')}
+            onNavigateToConsole={() => setActiveTab('console')}
+            onNavigateToAudit={() => setActiveTab('audit')}
           />
         )}
 
-        {/* PAGE 02: REPORT / CIVIC INTELLIGENCE STUDIO */}
+        {/* AUTHORITY / SUPERVISOR / ADMIN CONSOLE */}
+        {activeTab === 'console' && (
+          <div className="authority-console-container">
+            <AuthorityConsole
+              onNavigateToTrack={(caseId) => {
+                if (caseId) setSelectedCaseForTracking(caseId);
+                setActiveTab('track');
+              }}
+              onNavigateToEvidence={(caseId) => {
+                if (caseId) setSelectedCaseForEvidence(caseId);
+                setActiveTab('evidence');
+              }}
+              onNavigateToAudit={(caseId) => {
+                if (caseId) setSelectedCaseForTracking(caseId);
+                setActiveTab('audit');
+              }}
+              recentCaseIds={recentDockets}
+            />
+          </div>
+        )}
+
+        {/* CITIZEN REPORT / CIVIC INTELLIGENCE STUDIO */}
         {activeTab === 'report' && (
           <div className="report-tab-container">
             {/* Top Civic Intelligence Intake Banner */}
@@ -354,7 +494,16 @@ export const App: React.FC = () => {
             )}
 
             {/* Active Session Connector Line */}
-            <div className={`workspace-session-flow ${isProcessing ? 'state-analyzing' : canonicalState?.ready_for_action ? 'state-validated' : 'state-idle'}`} aria-label="Session flow connectivity">
+            <div
+              className={`workspace-session-flow ${
+                isProcessing
+                  ? 'state-analyzing'
+                  : canonicalState?.ready_for_action
+                  ? 'state-validated'
+                  : 'state-idle'
+              }`}
+              aria-label="Session flow connectivity"
+            >
               <div className="flow-stage-node left">
                 <span className="node-marker" />
                 <span className="stage-tag">CONVERSATION</span>
@@ -375,7 +524,7 @@ export const App: React.FC = () => {
               </div>
             </div>
 
-            {/* 3-Zone Responsive Command Workspace (Left: Conversation, Center: Extraction HUD, Right: Live Civic Map) */}
+            {/* 3-Zone Responsive Command Workspace */}
             <div className="command-workspace-3zone">
               {/* ZONE 1 (Left): Unified WhatsApp-style Conversation Studio */}
               <section className="zone-conversation" aria-label="Conversation Studio">
@@ -410,13 +559,17 @@ export const App: React.FC = () => {
                   onLocationSelect={(lat, lng, name) => {
                     setSelectedCoordinates({ lat, lng, source: 'MAP_SELECTED' });
                     setConfirmedLocation(name || 'Map-Confirmed Location');
-                    setCanonicalState((prev) => prev ? {
-                      ...prev,
-                      latitude: lat,
-                      longitude: lng,
-                      location_source: 'MAP_SELECTED',
-                      location: prev.location || name || 'Map-Confirmed Location',
-                    } : null);
+                    setCanonicalState((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            latitude: lat,
+                            longitude: lng,
+                            location_source: 'MAP_SELECTED',
+                            location: prev.location || name || 'Map-Confirmed Location',
+                          }
+                        : null
+                    );
                   }}
                 />
               </section>
@@ -424,18 +577,31 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* PAGE 03: TRACK / CIVIC CASE JOURNEY */}
+        {/* TRACK DOCKET VIEW */}
         {activeTab === 'track' && (
           <div className="track-tab-container">
             <TrackingView
               initialCaseId={selectedCaseForTracking}
               recentCaseIds={recentDockets}
               onSelectCaseForEvidence={handleSelectCaseForEvidence}
+              initialMode="PUBLIC"
             />
           </div>
         )}
 
-        {/* PAGE 04: EVIDENCE / CIVIC RECORD WORKSPACE */}
+        {/* AUDIT TRAIL VIEW (Directly launched from Nav for Supervisor / Admin) */}
+        {activeTab === 'audit' && (
+          <div className="track-tab-container">
+            <TrackingView
+              initialCaseId={selectedCaseForTracking}
+              recentCaseIds={recentDockets}
+              onSelectCaseForEvidence={handleSelectCaseForEvidence}
+              initialMode="AUDIT"
+            />
+          </div>
+        )}
+
+        {/* EVIDENCE STUDIO */}
         {activeTab === 'evidence' && (
           <div className="evidence-tab-container">
             <EvidenceStudio
@@ -445,6 +611,9 @@ export const App: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* Authentication Login Modal */}
+      <LoginModal />
 
       {/* Action Docket Review Modal */}
       <ActionDocketModal
@@ -459,7 +628,9 @@ export const App: React.FC = () => {
         <div className="footer-content">
           <div className="footer-brand">
             <span className="footer-dot" />
-            <span className="technical-label">JARVIS CIVIC // AUTONOMOUS MUNICIPAL DECISION SUPPORT SYSTEM</span>
+            <span className="technical-label">
+              JARVIS CIVIC // AUTONOMOUS MUNICIPAL DECISION SUPPORT SYSTEM
+            </span>
           </div>
           <div className="footer-disclaimer">
             This record is generated by JARVIS Civic and is not proof of official government submission or resolution.
@@ -467,6 +638,19 @@ export const App: React.FC = () => {
         </div>
       </footer>
     </div>
+  );
+};
+
+export const App: React.FC<{ initialUser?: any; skipInitialCheck?: boolean }> = ({
+  initialUser,
+  skipInitialCheck,
+}) => {
+  return (
+    <AuthProvider initialUser={initialUser} skipInitialCheck={skipInitialCheck}>
+      <WorkspaceProvider>
+        <AppContent />
+      </WorkspaceProvider>
+    </AuthProvider>
   );
 };
 

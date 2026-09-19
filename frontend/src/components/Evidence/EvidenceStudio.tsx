@@ -15,7 +15,8 @@ import {
   Lock,
 } from 'lucide-react';
 import { evidenceApi } from '../../services/api';
-import { EvidenceMetadata } from '../../types/civic';
+import { EvidenceMetadata, ApplicationRole } from '../../types/civic';
+import { useWorkspace } from '../../context/WorkspaceContext';
 import './EvidenceUpload.css';
 
 interface EvidenceStudioProps {
@@ -39,6 +40,7 @@ const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.pdf', '.mp3', '.wav', '.txt'];
 
 export const EvidenceStudio: React.FC<EvidenceStudioProps> = ({ initialCaseId = '', onSuccess }) => {
+  const { session } = useWorkspace();
   const [caseId, setCaseId] = useState(initialCaseId);
   const [stagedFiles, setStagedFiles] = useState<StagedEvidenceItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -135,7 +137,13 @@ export const EvidenceStudio: React.FC<EvidenceStudioProps> = ({ initialCaseId = 
     setErrorMessage(null);
 
     try {
-      const metadata = await evidenceApi.uploadEvidence(caseId.trim(), item.file);
+      const metadata = await evidenceApi.uploadEvidence(
+        caseId.trim(),
+        item.file,
+        session.role,
+        session.principalId,
+        session.department
+      );
       setStagedFiles((prev) =>
         prev.map((f) => (f.id === itemId ? { ...f, state: 'STORED', metadata } : f))
       );

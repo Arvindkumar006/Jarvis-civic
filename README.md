@@ -591,6 +591,120 @@ The structured Civic Action Docket is engineered as a clean boundary for future 
 
 ---
 
+## Phase 8.6 — OpenSearch Authorized Civic Docket Search
+
+> [!IMPORTANT]
+> **OpenSearch is a searchable projection, not the authoritative civic record.**
+> Authoritative civic docket persistence remains strictly governed by backend storage (`CaseStore` / `CaseRepository`).
+> Cedar remains the sole, authoritative authorization decision layer. OpenSearch never makes authorization decisions.
+
+### 1. Architectural Role & Flow
+
+OpenSearch 2.11.1 provides high-performance, structured full-text and attribute search across civic dockets for authorized municipal workflows:
+
+```
+Authenticated Session (jarvis_session_id)
+        ↓
+AuthenticatedPrincipal (server-derived identity)
+        ↓
+Cedar Authorization (search_dockets on CivicDocketSearch)
+        ↓ (ALLOW / DENY -> 403)
+DocketSearchService (OpenSearch DSL boolean filter with department scope)
+        ↓
+OpenSearch 2.11.1 (jarvis-civic-dockets-v1 via alias jarvis-civic-dockets)
+        ↓
+Sanitized Result Projection (bounded pagination, no secrets or private owner IDs)
+```
+
+### 2. Local Startup Instructions
+
+OpenSearch runs as an isolated single-node container via Docker Compose:
+
+```bash
+docker compose up -d opensearch
+```
+
+Configuration details:
+* **Image:** `opensearchproject/opensearch:2.11.1`
+* **Port:** `9200` (REST API), `9600` (performance analyzer)
+* **Mode:** Single-node local development (`plugins.security.disabled=true`)
+* **JVM Heap:** Limited to `-Xms512m -Xmx512m` with `bootstrap.memory_lock=true`
+* **Index Name:** `jarvis-civic-dockets-v1` with alias `jarvis-civic-dockets`
+
+### 3. Health & Readiness Verification
+
+To verify OpenSearch cluster health directly:
+```bash
+curl http://localhost:9200/_cluster/health
+```
+
+To verify through JARVIS Civic backend readiness probe:
+```bash
+curl http://localhost:8000/api/health/ready
+```
+Returns:
+```json
+{
+  "status": "ready",
+  "dependencies": {
+    "cedar_engine": "available",
+    "persistence": "in_memory_ready",
+    "opensearch": "healthy"
+  }
+}
+```
+
+If OpenSearch is temporarily stopped, FastAPI continues running cleanly and reports `dependencies.opensearch: "unavailable"`. Search queries return an honest `HTTP 503 Service Unavailable`.
+
+### 4. Search API Specification
+
+#### `GET /api/dockets/search`
+* **Authentication:** Requires valid `jarvis_session_id` session cookie (`HTTP 401` if absent/expired).
+* **Authorization:** Evaluated by AWS Cedar (`HTTP 403` if unauthorized).
+* **Query Parameters:**
+  * `q`: Free-text search term across `title`, `description`, `location`, `pincode`, and `case_id`.
+  * `department`: Department filter (restricted to principal department for authority officers).
+  * `status`: Lifecycle status filter (e.g. `DOCKET_CREATED`, `UNDER_REVIEW`, `RESOLVED`).
+  * `category`: Defect category filter.
+  * `page`: 1-indexed page number (default: 1).
+  * `page_size`: Bounded page size (1 to 100, default: 20).
+  * `sort_by`: Field (`updated_at`, `created_at`, `status`).
+  * `sort_order`: Direction (`desc` or `asc`).
+
+### 5. Dual-Layer Department Isolation
+
+* **Level 1 (Cedar PDP):** Cedar evaluates `resource.department == principal.department` for `AuthorityOfficer` and `MunicipalSupervisor`. If an officer authenticated in `DRAINAGE_STORMWATER` submits `department=PWD_ROADS`, Cedar immediately denies the request with `HTTP 403 Forbidden`.
+* **Level 2 (OpenSearch DSL):** The backend forcibly binds the authenticated principal's department into the OpenSearch boolean query filter clauses:
+  ```json
+  {"filter": [{"term": {"department": "DRAINAGE_STORMWATER"}}]}
+  ```
+
+### 6. Index Rebuild & Reconciliation
+
+If the search index is ever reset, emptied, or diverges from primary storage:
+
+#### `POST /api/dockets/rebuild-index`
+* Restricted to `Administrator` via Cedar policy.
+* Scans all records from the authoritative `CaseStore` (with complete pagination across DynamoDB pages if in LocalStack mode).
+* Projects and re-indexes every case into OpenSearch.
+* Returns reconciliation metrics:
+  ```json
+  {
+    "total_authoritative_cases": 12,
+    "successfully_indexed": 12,
+    "failed_indexing": 0,
+    "errors": []
+  }
+  ```
+
+### 7. Troubleshooting
+
+* **Search returns HTTP 503:** Verify Docker container is running (`docker ps | grep opensearch`). Start with `docker compose up -d opensearch`.
+* **Search returns HTTP 403:** Principal role lacks docket search permissions (e.g., `Citizen` or `PublicUser`), or an authority officer attempted cross-department access.
+* **Results out of sync:** Run the administrative rebuild endpoint (`POST /api/dockets/rebuild-index`) as Administrator.
+
+---
+
 ## Repository
 
 * **GitHub Repository:** [https://github.com/Arvindkumar006/Jarvis-civic](https://github.com/Arvindkumar006/Jarvis-civic)

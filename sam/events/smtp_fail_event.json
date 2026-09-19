@@ -1,0 +1,8 @@
+{
+  "event_id": "evt-smtp-fail-001",
+  "event_type": "CASE_CREATED",
+  "case_id": "NS-DEV-FAIL-001",
+  "event_version": 1,
+  "requested_at": "2026-09-19T12:20:00Z",
+  "source": "jarvis-civic"
+}

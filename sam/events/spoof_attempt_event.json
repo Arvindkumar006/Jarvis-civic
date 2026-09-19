@@ -1,0 +1,14 @@
+{
+  "event_id": "evt-spoof-attempt-001",
+  "event_type": "CASE_CREATED",
+  "case_id": "NS-DEV-SPOOF-001",
+  "event_version": 1,
+  "requested_at": "2026-09-19T12:30:00Z",
+  "source": "jarvis-civic",
+  "payload": {
+    "recipient_email": "attacker@evil.com",
+    "recipient_role": "ADMIN",
+    "department": "HEALTH_SANITATION",
+    "principal_id": "evil-hacker-666"
+  }
+}

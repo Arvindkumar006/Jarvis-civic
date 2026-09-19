@@ -19,11 +19,17 @@ import {
   Zap,
 } from 'lucide-react';
 import { CivicMap, MapMarkerItem } from '../Map/CivicMap';
+import { useWorkspace } from '../../context/WorkspaceContext';
+import { useAuth } from '../../context/AuthContext';
+import { ApplicationRole } from '../../types/civic';
+import { WorkspaceSelector } from '../Workspace/WorkspaceSelector';
 import './ProductExperience.css';
 
 interface ProductExperienceProps {
   onStartReport: () => void;
   onExploreTrack: () => void;
+  onNavigateToConsole?: () => void;
+  onNavigateToAudit?: () => void;
 }
 
 // Sample civic markers for Page 1 interactive map
@@ -351,7 +357,13 @@ const TECH_STACK_ITEMS: TechItem[] = [
 export const ProductExperience: React.FC<ProductExperienceProps> = ({
   onStartReport,
   onExploreTrack,
+  onNavigateToConsole,
+  onNavigateToAudit,
 }) => {
+  const { session } = useWorkspace();
+  const { role, department } = session;
+  const { openLogin } = useAuth();
+
   const [activePipelineIndex, setActivePipelineIndex] = useState(0);
   const [selectedLang, setSelectedLang] = useState<LangSample>(MULTILINGUAL_SAMPLES[0]);
   const [selectedTech, setSelectedTech] = useState<TechItem>(TECH_STACK_ITEMS[0]);
@@ -378,43 +390,221 @@ export const ProductExperience: React.FC<ProductExperienceProps> = ({
         <div className="hero-brand-lockup">
           <div className="hero-ruler-tag">
             <span className="ruler-line" />
-            <span className="ruler-text">CIVIC INTELLIGENCE COMMAND INTERFACE // SYSTEM INTRODUCTION</span>
+            <span className="ruler-text">
+              {role === ApplicationRole.CITIZEN
+                ? 'CITIZEN CIVIC WORKSPACE // LIVE INTAKE'
+                : role === ApplicationRole.PUBLIC
+                ? 'PUBLIC CIVIC TRACKING // ANONYMOUS PROJECTION'
+                : role === ApplicationRole.AUTHORITY_OFFICER
+                ? 'AUTHORITY WORKSPACE // DEPARTMENTAL REVIEW'
+                : role === ApplicationRole.MUNICIPAL_SUPERVISOR
+                ? 'SUPERVISOR WORKSPACE // AUDIT & OVERSIGHT'
+                : 'ADMINISTRATOR // CIVIC CONTROL PLANE'}
+            </span>
             <span className="ruler-line" />
           </div>
 
-          <h1 className="hero-editorial-title">
-            Speak. <br />
-            Report. <br />
-            <span className="title-accent-glow">Resolve.</span>
-          </h1>
+          {/* CITIZEN WORKSPACE HERO */}
+          {role === ApplicationRole.CITIZEN && (
+            <>
+              <h1 className="hero-editorial-title">
+                Speak. <br />
+                Report. <br />
+                <span className="title-accent-glow">Resolve.</span>
+              </h1>
 
-          <div className="hero-standout-statement">
-            <span className="statement-line">One conversation.</span>
-            <span className="statement-line highlight">One structured civic action.</span>
-          </div>
+              <div className="hero-standout-statement">
+                <span className="statement-line">Your civic issue starts here.</span>
+                <span className="statement-line highlight">One structured civic action.</span>
+              </div>
 
-          <p className="hero-narrative-copy">
-            Tell JARVIS what needs attention. It understands the issue, identifies what information is missing,
-            helps locate it, recommends routing, and creates an AI-generated Civic Action Docket.
-          </p>
+              <p className="hero-narrative-copy">
+                Tell JARVIS what needs attention. It understands the issue, identifies what information is missing,
+                helps locate it, recommends routing, and creates an AI-generated Civic Action Docket.
+              </p>
 
-          <div className="hero-cta-button-row">
-            <button
-              type="button"
-              className="btn-hero-primary"
-              onClick={onStartReport}
-            >
-              <span>START A CIVIC REPORT</span>
-              <ArrowRight size={16} />
-            </button>
-            <button
-              type="button"
-              className="btn-hero-secondary"
-              onClick={onExploreTrack}
-            >
-              <span>TRACK CASE JOURNEY</span>
-            </button>
-          </div>
+              <div className="hero-cta-button-row">
+                <button
+                  type="button"
+                  className="btn-hero-primary"
+                  onClick={onStartReport}
+                >
+                  <span>START A CIVIC REPORT</span>
+                  <ArrowRight size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="btn-hero-secondary"
+                  onClick={onExploreTrack}
+                >
+                  <span>TRACK CASE JOURNEY</span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* AUTHORITY OFFICER WORKSPACE HERO */}
+          {role === ApplicationRole.AUTHORITY_OFFICER && (
+            <>
+              <h1 className="hero-editorial-title">
+                Authorized <br />
+                Civic <br />
+                <span className="title-accent-glow">Workspace.</span>
+              </h1>
+
+              <div className="hero-standout-statement">
+                <span className="statement-line">Your authorized civic workspace.</span>
+                {department && (
+                  <span className="statement-line highlight">
+                    Jurisdiction: {department.replace(/_/g, ' ')}
+                  </span>
+                )}
+              </div>
+
+              <p className="hero-narrative-copy">
+                Review department-scoped civic action dockets, execute single-step forward lifecycle transitions,
+                and inspect attached photographic evidence under server-side Cedar policy enforcement.
+              </p>
+
+              <div className="hero-cta-button-row">
+                {onNavigateToConsole && (
+                  <button
+                    type="button"
+                    className="btn-hero-primary"
+                    onClick={onNavigateToConsole}
+                  >
+                    <span>ENTER AUTHORITY CONSOLE</span>
+                    <ArrowRight size={16} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-hero-secondary"
+                  onClick={onExploreTrack}
+                >
+                  <span>TRACK CIVIC DOCKET</span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* MUNICIPAL SUPERVISOR WORKSPACE HERO */}
+          {role === ApplicationRole.MUNICIPAL_SUPERVISOR && (
+            <>
+              <h1 className="hero-editorial-title">
+                Municipal <br />
+                Workflow <br />
+                <span className="title-accent-glow">Oversight.</span>
+              </h1>
+
+              <div className="hero-standout-statement">
+                <span className="statement-line">Department workflow oversight.</span>
+                {department && (
+                  <span className="statement-line highlight">
+                    Scope: {department.replace(/_/g, ' ')}
+                  </span>
+                )}
+              </div>
+
+              <p className="hero-narrative-copy">
+                Supervise departmental civic workflows, enforce canonical lifecycle transitions,
+                and inspect authorized append-only Cedar audit events.
+              </p>
+
+              <div className="hero-cta-button-row">
+                {onNavigateToConsole && (
+                  <button
+                    type="button"
+                    className="btn-hero-primary"
+                    onClick={onNavigateToConsole}
+                  >
+                    <span>ENTER SUPERVISOR CONSOLE</span>
+                    <ArrowRight size={16} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-hero-secondary"
+                  onClick={onExploreTrack}
+                >
+                  <span>TRACK CIVIC DOCKET</span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ADMINISTRATOR WORKSPACE HERO */}
+          {role === ApplicationRole.ADMINISTRATOR && (
+            <>
+              <h1 className="hero-editorial-title">
+                Administrative <br />
+                Civic <br />
+                <span className="title-accent-glow">Control Plane.</span>
+              </h1>
+
+              <div className="hero-standout-statement">
+                <span className="statement-line">Administrative civic control plane.</span>
+                <span className="statement-line highlight">Universal Jurisdiction</span>
+              </div>
+
+              <p className="hero-narrative-copy">
+                Universal access to civic workflows, case triage, and append-only audit trail inspection
+                across all municipal department boundaries.
+              </p>
+
+              <div className="hero-cta-button-row">
+                {onNavigateToConsole && (
+                  <button
+                    type="button"
+                    className="btn-hero-primary"
+                    onClick={onNavigateToConsole}
+                  >
+                    <span>ENTER ADMIN CONSOLE</span>
+                    <ArrowRight size={16} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-hero-secondary"
+                  onClick={onExploreTrack}
+                >
+                  <span>TRACK CIVIC DOCKET</span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* PUBLIC TRACKING HERO */}
+          {role === ApplicationRole.PUBLIC && (
+            <>
+              <h1 className="hero-editorial-title">
+                Public <br />
+                Civic <br />
+                <span className="title-accent-glow">Tracking.</span>
+              </h1>
+
+              <div className="hero-standout-statement">
+                <span className="statement-line">Public-safe civic tracking.</span>
+                <span className="statement-line highlight">Anonymous Safe Projection</span>
+              </div>
+
+              <p className="hero-narrative-copy">
+                Track publicly available civic docket progression without an authenticated authority workspace.
+                Citizen identity, contact numbers, and private audit trails remain strictly shielded.
+              </p>
+
+              <div className="hero-cta-button-row">
+                <button
+                  type="button"
+                  className="btn-hero-primary"
+                  onClick={onExploreTrack}
+                >
+                  <span>TRACK PUBLIC DOCKET</span>
+                  <ArrowRight size={16} />
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Real Sequential Civic Transformation Visual */}
@@ -1021,6 +1211,181 @@ export const ProductExperience: React.FC<ProductExperienceProps> = ({
               <span>START A CIVIC REPORT</span>
               <ArrowRight size={18} />
             </button>
+          </div>
+        </div>
+      </section>
+
+      {/* 9. ROLE SELECTION AT BOTTOM OF LANDING PAGE // INTENDED ENTRY POINT */}
+      <section className="experience-roles-section" id="role-selection-section" aria-label="Civic Role Selection">
+        <div className="experience-section-header">
+          <div className="section-ruler-tag">
+            <span className="ruler-line" />
+            <span className="ruler-text">ACCESS CIVIC WORKSPACE // ROLE SELECTION</span>
+            <span className="ruler-line" />
+          </div>
+          <h2 className="section-headline">Choose Your Civic Role</h2>
+          <p className="section-subheadline">
+            Select an intended workspace below to sign in. The backend verifies your allocated account credentials and authoritatively determines your actual role and department.
+          </p>
+        </div>
+
+        <div className="landing-roles-grid">
+          {/* CITIZEN */}
+          <div className="landing-role-card crosshair-corner" data-testid="role-card-citizen">
+            <div className="role-card-header">
+              <span className="role-card-index">01</span>
+              <span className="role-card-badge badge-citizen">CITIZEN ACCESS</span>
+            </div>
+            <h3 className="role-card-title">Citizen Workspace</h3>
+            <p className="role-card-desc">
+              Report civic grievances in plain speech or text, generate structured action dockets, attach photographic proof, and track progress.
+            </p>
+            <div className="role-card-caps">
+              <span className="cap-tag">• Report Issue</span>
+              <span className="cap-tag">• Track Docket</span>
+              <span className="cap-tag">• Evidence Studio</span>
+            </div>
+            <button
+              type="button"
+              className="btn-enter-role-card btn-role-citizen"
+              onClick={() => openLogin(ApplicationRole.CITIZEN)}
+              aria-label="Enter Citizen Workspace"
+            >
+              <span>ENTER CITIZEN WORKSPACE</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+
+          {/* AUTHORITY OFFICER - DRAINAGE */}
+          <div className="landing-role-card crosshair-corner" data-testid="role-card-authority-drainage">
+            <div className="role-card-header">
+              <span className="role-card-index">02</span>
+              <span className="role-card-badge badge-authority">DRAINAGE & STORMWATER</span>
+            </div>
+            <h3 className="role-card-title">Drainage Officer</h3>
+            <p className="role-card-desc">
+              Review assigned flood and drainage dockets, inspect coordinates, and execute authorized lifecycle status transitions under Cedar policy.
+            </p>
+            <div className="role-card-caps">
+              <span className="cap-tag">• Authority Console</span>
+              <span className="cap-tag">• Track Docket</span>
+              <span className="cap-tag">• Assigned Queue</span>
+            </div>
+            <button
+              type="button"
+              className="btn-enter-role-card btn-role-authority"
+              onClick={() => openLogin(ApplicationRole.AUTHORITY_OFFICER)}
+              aria-label="Enter Drainage Officer Workspace"
+            >
+              <span>ENTER DRAINAGE OFFICER WORKSPACE</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+
+          {/* AUTHORITY OFFICER - ROADS */}
+          <div className="landing-role-card crosshair-corner" data-testid="role-card-authority-roads">
+            <div className="role-card-header">
+              <span className="role-card-index">03</span>
+              <span className="role-card-badge badge-authority">PWD & ROADS</span>
+            </div>
+            <h3 className="role-card-title">Roads Officer</h3>
+            <p className="role-card-desc">
+              Triage pothole and roadway hazard dockets, update maintenance resolutions, and advance status along verified pathways.
+            </p>
+            <div className="role-card-caps">
+              <span className="cap-tag">• Authority Console</span>
+              <span className="cap-tag">• Road Hazard Queue</span>
+              <span className="cap-tag">• Resolution Notes</span>
+            </div>
+            <button
+              type="button"
+              className="btn-enter-role-card btn-role-authority"
+              onClick={() => openLogin(ApplicationRole.AUTHORITY_OFFICER)}
+              aria-label="Enter Roads Officer Workspace"
+            >
+              <span>ENTER ROADS OFFICER WORKSPACE</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+
+          {/* MUNICIPAL SUPERVISOR */}
+          <div className="landing-role-card crosshair-corner" data-testid="role-card-supervisor">
+            <div className="role-card-header">
+              <span className="role-card-index">04</span>
+              <span className="role-card-badge badge-supervisor">SUPERVISORY OVERSIGHT</span>
+            </div>
+            <h3 className="role-card-title">Municipal Supervisor</h3>
+            <p className="role-card-desc">
+              Oversee departmental operations, supervise case resolution workflows across all municipal queues, and inspect authorized audit events.
+            </p>
+            <div className="role-card-caps">
+              <span className="cap-tag">• Supervisor Overview</span>
+              <span className="cap-tag">• Department Queues</span>
+              <span className="cap-tag">• Audit Timeline</span>
+            </div>
+            <button
+              type="button"
+              className="btn-enter-role-card btn-role-supervisor"
+              onClick={() => openLogin(ApplicationRole.MUNICIPAL_SUPERVISOR)}
+              aria-label="Enter Municipal Supervisor Workspace"
+            >
+              <span>ENTER SUPERVISOR WORKSPACE</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+
+          {/* ADMINISTRATOR */}
+          <div className="landing-role-card crosshair-corner" data-testid="role-card-admin">
+            <div className="role-card-header">
+              <span className="role-card-index">05</span>
+              <span className="role-card-badge badge-admin">CONTROL PLANE</span>
+            </div>
+            <h3 className="role-card-title">System Administrator</h3>
+            <p className="role-card-desc">
+              System-wide administrative visibility, multi-department monitoring, user directory access, and full append-only audit trail inspection.
+            </p>
+            <div className="role-card-caps">
+              <span className="cap-tag">• Admin Operations</span>
+              <span className="cap-tag">• User Registry</span>
+              <span className="cap-tag">• Full Audit Trail</span>
+            </div>
+            <button
+              type="button"
+              className="btn-enter-role-card btn-role-admin"
+              onClick={() => openLogin(ApplicationRole.ADMINISTRATOR)}
+              aria-label="Enter System Administrator Workspace"
+            >
+              <span>ENTER SYSTEM ADMINISTRATOR WORKSPACE</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+
+          {/* PUBLIC TRACKING */}
+          <div className="landing-role-card crosshair-corner" data-testid="role-card-public">
+            <div className="role-card-header">
+              <span className="role-card-index">06</span>
+              <span className="role-card-badge badge-public">ANONYMOUS / PUBLIC</span>
+            </div>
+            <h3 className="role-card-title">Public Observer</h3>
+            <p className="role-card-desc">
+              Track public-safe civic docket progression without authority controls or private citizen personal information.
+            </p>
+            <div className="role-card-caps">
+              <span className="cap-tag">• Public Tracking</span>
+              <span className="cap-tag">• Lifecycle Journey</span>
+              <span className="cap-tag">• No Login Required</span>
+            </div>
+            <div className="public-card-actions">
+              <button
+                type="button"
+                className="btn-enter-role-card btn-role-public"
+                onClick={onExploreTrack}
+                aria-label="Continue as Public Observer"
+              >
+                <span>CONTINUE AS PUBLIC OBSERVER</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
           </div>
         </div>
       </section>

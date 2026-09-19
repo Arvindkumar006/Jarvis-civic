@@ -1,0 +1,8 @@
+{
+  "event_id": "evt-unknown-type-001",
+  "event_type": "UNKNOWN_CUSTOM_ACTION",
+  "case_id": "NS-CHN-2026-F981",
+  "event_version": 1,
+  "requested_at": "2026-09-19T12:00:00Z",
+  "source": "jarvis-civic"
+}

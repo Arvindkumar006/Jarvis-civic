@@ -29,12 +29,15 @@ import {
 } from '../../types/civic';
 import { auditApi, casesApi, trackingApi } from '../../services/api';
 import { CivicMap, getApproxCoordinates, MapMarkerItem } from '../Map/CivicMap';
+import { useWorkspace } from '../../context/WorkspaceContext';
+import { useAuth } from '../../context/AuthContext';
 import './TrackingView.css';
 
 interface TrackingViewProps {
   initialCaseId?: string;
   recentCaseIds?: string[];
   onSelectCaseForEvidence?: (caseId: string) => void;
+  initialMode?: TrackingMode;
 }
 
 type TrackingMode = 'PUBLIC' | 'AUTHORITY' | 'AUDIT';
@@ -90,9 +93,43 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
   initialCaseId = '',
   recentCaseIds = [],
   onSelectCaseForEvidence,
+  initialMode,
 }) => {
-  // Mode selection
-  const [activeMode, setActiveMode] = useState<TrackingMode>('PUBLIC');
+  // Inherit active workspace & backend auth context
+  const { session } = useWorkspace();
+  let auth: ReturnType<typeof useAuth> | null = null;
+  try {
+    auth = useAuth();
+  } catch {
+    auth = null;
+  }
+
+  const effectiveRole = auth && auth.isAuthenticated ? auth.role : session.role;
+  const effectiveDept = auth && auth.isAuthenticated ? auth.department : session.department;
+  const effectivePid = auth && auth.isAuthenticated ? auth.principalId : session.principalId;
+  const effectiveName = auth?.displayName || session.label;
+
+  // Mode selection (PUBLIC, AUTHORITY, AUDIT)
+  const [activeMode, setActiveMode] = useState<TrackingMode>(() => {
+    if (initialMode) return initialMode;
+    return 'PUBLIC';
+  });
+
+  // Sync mode if initialMode prop changes
+  useEffect(() => {
+    if (initialMode) {
+      setActiveMode(initialMode);
+    }
+  }, [initialMode]);
+
+  // Restrict mode if role changes
+  useEffect(() => {
+    if (effectiveRole === ApplicationRole.PUBLIC || effectiveRole === ApplicationRole.CITIZEN) {
+      if (activeMode !== 'PUBLIC') setActiveMode('PUBLIC');
+    } else if (effectiveRole === ApplicationRole.AUTHORITY_OFFICER && activeMode === 'AUDIT') {
+      setActiveMode('AUTHORITY');
+    }
+  }, [effectiveRole, activeMode]);
 
   // Input & Query State
   const [caseIdInput, setCaseIdInput] = useState(initialCaseId);
@@ -101,11 +138,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
   const [projection, setProjection] = useState<PublicTrackingProjection | null>(null);
   const [caseRecord, setCaseRecord] = useState<CivicCaseRecord | null>(null);
   const [copied, setCopied] = useState(false);
-
-  // Simulated Actor State (Frontend Evaluation / Test Mode only)
-  const [simulatedRole, setSimulatedRole] = useState<ApplicationRole>(ApplicationRole.AUTHORITY_OFFICER);
-  const [simulatedPrincipalId, setSimulatedPrincipalId] = useState('officer-drainage-1');
-  const [simulatedDept, setSimulatedDept] = useState<ControlledDepartment>(ControlledDepartment.DRAINAGE_STORMWATER);
 
   // Authority Workflow State
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
@@ -143,24 +175,6 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [confirmModalOpen]);
 
-  // Adjust simulated defaults when role changes
-  const handleRoleChange = (newRole: ApplicationRole) => {
-    setSimulatedRole(newRole);
-    if (newRole === ApplicationRole.AUTHORITY_OFFICER) {
-      setSimulatedPrincipalId('officer-drainage-1');
-      setSimulatedDept(ControlledDepartment.DRAINAGE_STORMWATER);
-    } else if (newRole === ApplicationRole.MUNICIPAL_SUPERVISOR) {
-      setSimulatedPrincipalId('sup-chennai-1');
-      setSimulatedDept(ControlledDepartment.DRAINAGE_STORMWATER);
-    } else if (newRole === ApplicationRole.ADMINISTRATOR) {
-      setSimulatedPrincipalId('admin-sys-1');
-    } else if (newRole === ApplicationRole.CITIZEN) {
-      setSimulatedPrincipalId('cit-user-1');
-    } else {
-      setSimulatedPrincipalId('anon-public');
-    }
-  };
-
   // Main Tracking Handler
   const handleTrack = async (targetId: string) => {
     const id = targetId.trim();
@@ -190,15 +204,15 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
     }
   };
 
-  // Load supplemental case details & audit events based on current actor
+  // Load supplemental case details & audit events based on current workspace actor
   const loadSupplementalData = async (caseId: string, _currentStatus?: string) => {
     // Try loading case details (succeeds if authorized)
     try {
       const fullCase = await casesApi.getCase(
         caseId,
-        simulatedRole,
-        simulatedPrincipalId,
-        simulatedDept
+        effectiveRole,
+        effectivePid,
+        effectiveDept as any
       );
       setCaseRecord(fullCase);
     } catch {
@@ -209,9 +223,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
     try {
       const hist = await casesApi.getHistory(
         caseId,
-        simulatedRole,
-        simulatedPrincipalId,
-        simulatedDept
+        effectiveRole,
+        effectivePid,
+        effectiveDept as any
       );
       setCaseHistory(hist);
     } catch {
@@ -231,9 +245,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
     try {
       const events = await auditApi.getCaseAuditTrail(
         caseId,
-        simulatedRole,
-        simulatedPrincipalId,
-        simulatedDept
+        effectiveRole,
+        effectivePid,
+        effectiveDept as any
       );
       setAuditEvents(events);
       setAuditRestricted(false);
@@ -246,12 +260,12 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
     }
   };
 
-  // Re-fetch audit when mode switches to AUDIT or simulated actor changes
+  // Re-fetch audit when mode switches to AUDIT or workspace actor changes
   useEffect(() => {
     if (projection && activeMode === 'AUDIT') {
       fetchAuditTrail(projection.case_id);
     }
-  }, [activeMode, simulatedRole, simulatedDept, simulatedPrincipalId]);
+  }, [activeMode, effectiveRole, effectiveDept, effectivePid]);
 
   const handleCopyId = () => {
     if (projection?.case_id) {
@@ -282,18 +296,18 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
 
     setWorkflowActionLoading(true);
     setWorkflowError(null);
-    setWorkflowSuccessMsg(null);
 
     try {
+      // Execute stage advancement along valid next path
       const updated = await casesApi.updateStatus(
         projection.case_id,
         {
           status: nextTransition.nextStatus,
           note: transitionNote.trim() || undefined,
         },
-        simulatedRole,
-        simulatedPrincipalId,
-        simulatedDept
+        effectiveRole,
+        effectivePid,
+        effectiveDept as any
       );
 
       // Update state
@@ -328,9 +342,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
       const updated = await casesApi.addResolutionNote(
         projection.case_id,
         { note: newResolutionNote.trim() },
-        simulatedRole,
-        simulatedPrincipalId,
-        simulatedDept
+        effectiveRole,
+        effectivePid,
+        effectiveDept as any
       );
       setCaseRecord(updated);
       setNewResolutionNote('');
@@ -369,117 +383,80 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
   // Check if simulated department matches case
   const isDeptMismatch =
     projection &&
-    simulatedRole === ApplicationRole.AUTHORITY_OFFICER &&
-    simulatedDept !== projection.recommended_department;
+    effectiveRole === ApplicationRole.AUTHORITY_OFFICER &&
+    effectiveDept !== projection.recommended_department;
 
   return (
     <div className="civic-tracking-view crosshair-corner" aria-label="Civic Action Journey">
       {/* Header Bar */}
       <div className="tracking-header-block">
         <div className="tracking-prehead">
-          <span className="technical-label">CIVIC CASE WORKSPACE // AUTHORITY & AUDIT TRAIL</span>
+          <span className="technical-label">CIVIC CASE WORKSPACE // TRACK DOCKET</span>
         </div>
         <h2 className="tracking-view-title">Track Civic Action Docket</h2>
         <p className="tracking-view-sub">
-          Verify public tracking progression, execute authorized authority status transitions, and inspect Cedar-protected audit logs.
+          Verify public tracking progression, inspect lifecycle milestones, and execute authorized status transitions.
         </p>
       </div>
 
-      {/* THREE-MODE SELECTOR TABS */}
-      <div className="tracking-mode-switcher" role="tablist" aria-label="Workspace Modes">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeMode === 'PUBLIC'}
-          className={`tracking-mode-btn ${activeMode === 'PUBLIC' ? 'active' : ''}`}
-          onClick={() => setActiveMode('PUBLIC')}
-        >
-          <Lock size={13} />
-          <span>1. PUBLIC-SAFE TRACKING</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeMode === 'AUTHORITY'}
-          className={`tracking-mode-btn mode-authority ${activeMode === 'AUTHORITY' ? 'active' : ''}`}
-          onClick={() => setActiveMode('AUTHORITY')}
-        >
-          <Building2 size={13} />
-          <span>2. AUTHORITY WORKFLOW</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeMode === 'AUDIT'}
-          className={`tracking-mode-btn mode-audit ${activeMode === 'AUDIT' ? 'active' : ''}`}
-          onClick={() => setActiveMode('AUDIT')}
-        >
-          <ShieldCheck size={13} />
-          <span>3. AUTHORIZED AUDIT TRAIL</span>
-        </button>
+      {/* COMPACT WORKSPACE IDENTITY STRIP (No simulated controls, strictly server-authoritative) */}
+      <div className="workspace-identity-strip" role="status" aria-label="Workspace Identity">
+        <div className="workspace-identity-meta">
+          <span className="workspace-identity-dot" />
+          <span className="technical-label">PROTOTYPE WORKSPACE IDENTITY // SERVER AUTH:</span>
+          <strong className="identity-role-label">{effectiveName}</strong>
+          <span className="identity-role-badge">[{effectiveRole.replace(/_/g, ' ')}]</span>
+          {effectiveDept && (
+            <span className="identity-dept-label">[{String(effectiveDept).replace(/_/g, ' ')}]</span>
+          )}
+          <span className="identity-pid-label">({effectivePid})</span>
+        </div>
+        <div className="identity-security-pill">
+          <Lock size={12} color="var(--civic-emerald)" />
+          <span>CEDAR PEP ACTIVE</span>
+        </div>
       </div>
 
-      {/* SIMULATED ACTOR CONSOLE (Shown in Authority & Audit Modes) */}
-      {(activeMode === 'AUTHORITY' || activeMode === 'AUDIT') && (
-        <div className="simulation-control-strip animate-fade-in" role="region" aria-label="Simulated Actor Console">
-          <div className="simulation-top-row">
-            <div className="simulation-badge">
-              <Sliders size={12} />
-              <span>SIMULATED AUTHORITY CONTEXT</span>
-            </div>
-            <span className="simulation-notice">
-              Frontend actor controls are for local testing only. Server-side Cedar PEP determines authoritative authorization.
-            </span>
-          </div>
+      {/* ROLE-AWARE WORKSPACE MODES (Exposed only for authorized authority/admin roles) */}
+      {(effectiveRole === ApplicationRole.AUTHORITY_OFFICER ||
+        effectiveRole === ApplicationRole.MUNICIPAL_SUPERVISOR ||
+        effectiveRole === ApplicationRole.ADMINISTRATOR) && (
+        <div className="tracking-mode-switcher" role="tablist" aria-label="Workspace Modes">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeMode === 'PUBLIC'}
+            className={`tracking-mode-btn ${activeMode === 'PUBLIC' ? 'active' : ''}`}
+            onClick={() => setActiveMode('PUBLIC')}
+          >
+            <Lock size={13} />
+            <span>1. PUBLIC-SAFE TRACKING</span>
+          </button>
 
-          <div className="simulation-fields-grid">
-            <div className="sim-field-group">
-              <label className="sim-field-label">Simulated Role</label>
-              <select
-                className="sim-field-select"
-                value={simulatedRole}
-                onChange={(e) => handleRoleChange(e.target.value as ApplicationRole)}
-              >
-                <option value={ApplicationRole.AUTHORITY_OFFICER}>AUTHORITY OFFICER (Departmental)</option>
-                <option value={ApplicationRole.MUNICIPAL_SUPERVISOR}>MUNICIPAL SUPERVISOR (Departmental)</option>
-                <option value={ApplicationRole.ADMINISTRATOR}>ADMINISTRATOR (Universal)</option>
-                <option value={ApplicationRole.CITIZEN}>CITIZEN (Restricted)</option>
-                <option value={ApplicationRole.PUBLIC}>PUBLIC (Anonymous)</option>
-              </select>
-            </div>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeMode === 'AUTHORITY'}
+            className={`tracking-mode-btn mode-authority ${activeMode === 'AUTHORITY' ? 'active' : ''}`}
+            onClick={() => setActiveMode('AUTHORITY')}
+          >
+            <Building2 size={13} />
+            <span>2. AUTHORITY WORKFLOW</span>
+          </button>
 
-            {(simulatedRole === ApplicationRole.AUTHORITY_OFFICER ||
-              simulatedRole === ApplicationRole.MUNICIPAL_SUPERVISOR) && (
-              <div className="sim-field-group">
-                <label className="sim-field-label">Assigned Department</label>
-                <select
-                  className="sim-field-select"
-                  value={simulatedDept}
-                  onChange={(e) => setSimulatedDept(e.target.value as ControlledDepartment)}
-                >
-                  <option value={ControlledDepartment.DRAINAGE_STORMWATER}>DRAINAGE_STORMWATER</option>
-                  <option value={ControlledDepartment.PWD_ROADS}>PWD_ROADS</option>
-                  <option value={ControlledDepartment.MUNICIPAL_CORPORATION}>MUNICIPAL_CORPORATION</option>
-                  <option value={ControlledDepartment.WASTE_MANAGEMENT}>WASTE_MANAGEMENT</option>
-                  <option value={ControlledDepartment.WATER_SUPPLY}>WATER_SUPPLY</option>
-                  <option value={ControlledDepartment.ELECTRICITY_UTILITY}>ELECTRICITY_UTILITY</option>
-                  <option value={ControlledDepartment.OTHER_MANUAL_REVIEW}>OTHER_MANUAL_REVIEW</option>
-                </select>
-              </div>
-            )}
-
-            <div className="sim-field-group">
-              <label className="sim-field-label">Principal ID</label>
-              <input
-                type="text"
-                className="sim-field-input"
-                value={simulatedPrincipalId}
-                onChange={(e) => setSimulatedPrincipalId(e.target.value)}
-              />
-            </div>
-          </div>
+          {(effectiveRole === ApplicationRole.MUNICIPAL_SUPERVISOR ||
+            effectiveRole === ApplicationRole.ADMINISTRATOR) && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeMode === 'AUDIT'}
+              className={`tracking-mode-btn mode-audit ${activeMode === 'AUDIT' ? 'active' : ''}`}
+              onClick={() => setActiveMode('AUDIT')}
+            >
+              <ShieldCheck size={13} />
+              <span>3. AUTHORIZED AUDIT TRAIL</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -863,8 +840,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                   <div>
                     <div className="dept-mismatch-title">DEPARTMENT SCOPE MISMATCH DETECTED</div>
                     <div className="dept-mismatch-desc">
-                      Case is assigned to <strong>{projection.recommended_department}</strong>, but current actor is simulated as <strong>{simulatedDept}</strong>.
-                      Cedar Policy will reject workflow mutations under fail-closed departmental scoping. Change simulated department above to match the case.
+                      Case is assigned to <strong>{projection.recommended_department}</strong>, but current actor workspace is configured as <strong>{session.department}</strong>.
+                      Cedar Policy will reject workflow mutations under fail-closed departmental scoping. Switch to an authority workspace with matching department jurisdiction.
                     </div>
                   </div>
                 </div>
@@ -1025,7 +1002,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                   <div className="restricted-sub">AUTHORITY-LEVEL AUTHORIZATION REQUIRED</div>
                   <p className="restricted-desc">
                     Access to internal system audit trails is strictly governed by Cedar authorization.
-                    The current simulated principal (<strong>{simulatedRole}</strong>) lacks permission to execute <code>read_audit_log</code> on this case.
+                    The current workspace principal (<strong>{session.role}</strong>) lacks permission to execute <code>read_audit_log</code> on this case.
                     Audit records are restricted to <strong>MUNICIPAL_SUPERVISOR</strong> (for assigned department) or <strong>ADMINISTRATOR</strong>.
                   </p>
                 </div>

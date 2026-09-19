@@ -14,6 +14,8 @@ import {
   PublicTrackingProjection,
   ResolutionNoteRequest,
   StatusTransitionRequest,
+  AuthenticatedUser,
+  LoginCredentials,
 } from '../types/civic';
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/+$/, '');
@@ -51,6 +53,24 @@ function buildSimulatedHeaders(
   return headers;
 }
 
+type UnauthorizedListener = (detail?: string) => void;
+const unauthorizedListeners: Set<UnauthorizedListener> = new Set();
+
+export function onUnauthorized(listener: UnauthorizedListener): () => void {
+  unauthorizedListeners.add(listener);
+  return () => unauthorizedListeners.delete(listener);
+}
+
+export function notifyUnauthorized(detail?: string): void {
+  unauthorizedListeners.forEach((listener) => {
+    try {
+      listener(detail);
+    } catch {
+      // ignore listener error
+    }
+  });
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let errorMessage = 'An error occurred while communicating with JARVIS Civic.';
@@ -68,7 +88,13 @@ async function handleResponse<T>(response: Response): Promise<T> {
       errorMessage = response.statusText || `Request failed with status ${response.status}`;
     }
 
-    if (response.status === 403) {
+    if (response.status === 401) {
+      errorMessage = rawDetail || 'Session has expired or is invalid. Please log in again.';
+      // Notify listeners unless this is an auth verification or login request
+      if (!response.url.includes('/api/auth/login') && !response.url.includes('/api/auth/me')) {
+        notifyUnauthorized(errorMessage);
+      }
+    } else if (response.status === 403) {
       errorMessage = rawDetail || 'Authorization denied by Cedar policy enforcement.';
     } else if (response.status === 404) {
       errorMessage = rawDetail || 'The requested civic record could not be found.';
@@ -97,6 +123,7 @@ export const conversationApi = {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(request),
       });
       return await handleResponse<ConversationResponse>(res);
@@ -127,6 +154,7 @@ export const casesApi = {
           'X-Principal-Id': principalId,
           'X-Principal-Role': 'CITIZEN',
         },
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
       return await handleResponse<CivicCaseRecord>(res);
@@ -150,6 +178,7 @@ export const casesApi = {
       const res = await fetch(`${BASE_URL}/api/cases/${encodeURIComponent(caseId)}`, {
         method: 'GET',
         headers: buildSimulatedHeaders(role, principalId, dept),
+        credentials: 'include',
       });
       return await handleResponse<CivicCaseRecord>(res);
     } catch (err: unknown) {
@@ -176,6 +205,7 @@ export const casesApi = {
           'Content-Type': 'application/json',
           ...buildSimulatedHeaders(role, principalId, dept),
         },
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
       return await handleResponse<CivicCaseRecord>(res);
@@ -203,6 +233,7 @@ export const casesApi = {
           'Content-Type': 'application/json',
           ...buildSimulatedHeaders(role, principalId, dept),
         },
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
       return await handleResponse<CivicCaseRecord>(res);
@@ -225,6 +256,7 @@ export const casesApi = {
       const res = await fetch(`${BASE_URL}/api/cases/${encodeURIComponent(caseId)}/history`, {
         method: 'GET',
         headers: buildSimulatedHeaders(role, principalId, dept),
+        credentials: 'include',
       });
       return await handleResponse<CaseHistoryItem[]>(res);
     } catch (err: unknown) {
@@ -249,6 +281,7 @@ export const auditApi = {
       const res = await fetch(`${BASE_URL}/api/audit/cases/${encodeURIComponent(caseId)}`, {
         method: 'GET',
         headers: buildSimulatedHeaders(role, principalId, dept),
+        credentials: 'include',
       });
       return await handleResponse<AuditEvent[]>(res);
     } catch (err: unknown) {
@@ -269,6 +302,7 @@ export const auditApi = {
       const res = await fetch(`${BASE_URL}/api/audit/logs`, {
         method: 'GET',
         headers: buildSimulatedHeaders(role, principalId, dept),
+        credentials: 'include',
       });
       return await handleResponse<AuditEvent[]>(res);
     } catch (err: unknown) {
@@ -286,18 +320,25 @@ export const evidenceApi = {
   async uploadEvidence(
     caseId: string,
     file: File,
-    principalId: string = 'cit-user-1'
+    role?: string,
+    principalId?: string,
+    dept?: string
   ): Promise<EvidenceMetadata> {
     try {
       const formData = new FormData();
       formData.append('file', file);
 
+      const simHeaders = buildSimulatedHeaders(role, principalId, dept);
+      const headers: Record<string, string> = {
+        'X-Principal-Id': principalId || 'cit-user-1',
+        'X-Principal-Role': role || 'CITIZEN',
+        ...simHeaders,
+      };
+
       const res = await fetch(`${BASE_URL}/api/cases/${encodeURIComponent(caseId)}/evidence`, {
         method: 'POST',
-        headers: {
-          'X-Principal-Id': principalId,
-          'X-Principal-Role': 'CITIZEN',
-        },
+        headers,
+        credentials: 'include',
         body: formData,
       });
       return await handleResponse<EvidenceMetadata>(res);
@@ -317,6 +358,7 @@ export const trackingApi = {
     try {
       const res = await fetch(`${BASE_URL}/api/tracking/${encodeURIComponent(caseId)}`, {
         method: 'GET',
+        credentials: 'include',
       });
       return await handleResponse<PublicTrackingProjection>(res);
     } catch (err: unknown) {
@@ -346,6 +388,66 @@ export const healthApi = {
   },
 };
 
+export const authApi = {
+  /**
+   * Authenticate user credentials server-side and establish HttpOnly session cookie.
+   */
+  async login(credentials: LoginCredentials): Promise<AuthenticatedUser> {
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(credentials),
+      });
+      return await handleResponse<AuthenticatedUser>(res);
+    } catch (err: unknown) {
+      if (err instanceof ApiError) throw err;
+      throw new ApiError('Authentication request failed due to network unavailability.', 0);
+    }
+  },
+
+  /**
+   * Retrieve active authenticated account identity resolved from session cookie.
+   */
+  async me(): Promise<AuthenticatedUser> {
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/me`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+      return await handleResponse<AuthenticatedUser>(res);
+    } catch (err: unknown) {
+      if (err instanceof ApiError) throw err;
+      throw new ApiError('Failed to verify session identity with backend.', 0);
+    }
+  },
+
+  /**
+   * Invalidate active session and clear session cookie.
+   */
+  async logout(): Promise<{ detail: string }> {
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+      return await handleResponse<{ detail: string }>(res);
+    } catch (err: unknown) {
+      if (err instanceof ApiError) throw err;
+      throw new ApiError('Logout request failed due to network unavailability.', 0);
+    }
+  },
+};
+
 export const api = {
   intakeConversation: conversationApi.intake,
   createCase: casesApi.createCase,
@@ -357,5 +459,8 @@ export const api = {
   uploadEvidence: evidenceApi.uploadEvidence,
   getPublicTracking: trackingApi.getTracking,
   checkHealth: healthApi.checkHealth,
+  authLogin: authApi.login,
+  authMe: authApi.me,
+  authLogout: authApi.logout,
 };
 

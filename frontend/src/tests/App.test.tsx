@@ -1,10 +1,16 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { App } from '../App';
-import { healthApi, conversationApi } from '../services/api';
-import { CivicIntent } from '../types/civic';
+import { healthApi, conversationApi, authApi } from '../services/api';
+import { CivicIntent, ApplicationRole } from '../types/civic';
 
 vi.mock('../services/api', () => ({
+  onUnauthorized: vi.fn(() => () => {}),
+  authApi: {
+    login: vi.fn(),
+    me: vi.fn(),
+    logout: vi.fn(),
+  },
   healthApi: {
     checkHealth: vi.fn(),
   },
@@ -26,10 +32,31 @@ describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(healthApi.checkHealth).mockResolvedValue(true);
+    vi.mocked(authApi.me).mockResolvedValue({
+      principal_id: 'cit-user-1',
+      email: 'citizen-01@jarvis.civic',
+      role: ApplicationRole.CITIZEN,
+      display_name: 'Ananya Sharma',
+      department: null,
+      is_active: true,
+      created_at: new Date().toISOString(),
+    });
   });
 
+  const renderAppAndWait = async () => {
+    const utils = render(<App />);
+    await waitFor(
+      () => {
+        expect(screen.queryByRole('status', { name: /Initializing security context/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Report Issue/i })).toHaveClass('active');
+      },
+      { timeout: 4000 }
+    );
+    return utils;
+  };
+
   it('renders JARVIS Civic branding, tagline, and navigation tabs', async () => {
-    render(<App />);
+    await renderAppAndWait();
 
     expect(screen.getByText('JARVIS')).toBeInTheDocument();
     expect(screen.getByText('CIVIC')).toBeInTheDocument();
@@ -42,7 +69,7 @@ describe('App', () => {
   });
 
   it('switches between tabs on navigation click', async () => {
-    render(<App />);
+    await renderAppAndWait();
 
     // Click Track Docket
     const trackTab = screen.getByRole('button', { name: /Track Docket/i });
@@ -76,9 +103,9 @@ describe('App', () => {
       session_id: 'test-session',
     });
 
-    render(<App />);
+    await renderAppAndWait();
 
-    const quickPrompt = screen.getByText('Waterlogging');
+    const quickPrompt = screen.getAllByRole('button', { name: /Waterlogging/i })[0];
     fireEvent.click(quickPrompt);
 
     await waitFor(() => {
@@ -88,7 +115,7 @@ describe('App', () => {
   });
 
   it('navigates to Page 01 Product Experience and returns to report via CTA', async () => {
-    render(<App />);
+    await renderAppAndWait();
 
     // Click brand lockup button to view Page 01 Product Experience
     const brandBtn = screen.getByRole('button', { name: /JARVIS Civic Home Experience/i });
