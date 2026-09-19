@@ -23,7 +23,7 @@ permit(
 );
 
 // POLICY C — Citizen Ownership
-// Citizens can only read, update, and add evidence to cases that they own
+// Citizens can only read, update, add evidence, and accept/reject resolution for cases that they own
 @id("policy_citizen_own_case")
 permit(
     principal is JarvisCivic::Citizen,
@@ -31,7 +31,9 @@ permit(
         JarvisCivic::Action::"read_own_case",
         JarvisCivic::Action::"update_own_case",
         JarvisCivic::Action::"add_evidence",
-        JarvisCivic::Action::"read_evidence"
+        JarvisCivic::Action::"read_evidence",
+        JarvisCivic::Action::"accept_resolution",
+        JarvisCivic::Action::"reject_resolution"
     ],
     resource
 )
@@ -88,13 +90,20 @@ when {
 };
 
 // POLICY F — Administrator Universal Management
-// Administrators may perform all defined civic operations and audit inspections
+// Administrators may perform defined civic operations and audit inspections,
+// but CANNOT accept or reject resolutions on behalf of citizens.
 @id("policy_administrator_all")
 permit(
     principal is JarvisCivic::Administrator,
     action,
     resource
-);
+)
+unless {
+    action in [
+        JarvisCivic::Action::"accept_resolution",
+        JarvisCivic::Action::"reject_resolution"
+    ]
+};
 
 // POLICY G — Authority Officer Search Scope
 // Officers may search dockets only within their assigned department

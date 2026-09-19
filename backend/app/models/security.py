@@ -43,6 +43,8 @@ class CivicAction(str, Enum):
     READ_EVIDENCE = "read_evidence"
     READ_AUDIT_LOG = "read_audit_log"
     SEARCH_DOCKETS = "search_dockets"
+    ACCEPT_RESOLUTION = "accept_resolution"
+    REJECT_RESOLUTION = "reject_resolution"
 
 
 class ApplicationPrincipal(BaseModel):
@@ -211,6 +213,34 @@ class ResolutionNoteRequest(BaseModel):
         return cleaned
 
 
+class CitizenResolutionAcceptRequest(BaseModel):
+    """Payload for authenticated citizen accepting case resolution."""
+
+    feedback: Optional[str] = Field(default=None, max_length=2000, description="Optional citizen resolution feedback")
+
+    @field_validator("feedback", mode="after")
+    @classmethod
+    def clean_feedback(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            cleaned = v.strip()
+            return cleaned if cleaned else None
+        return v
+
+
+class CitizenResolutionRejectRequest(BaseModel):
+    """Payload for authenticated citizen rejecting case resolution."""
+
+    reason: str = Field(..., min_length=5, max_length=2000, description="Substantive reason explaining why resolution is rejected")
+
+    @field_validator("reason", mode="after")
+    @classmethod
+    def validate_reason(cls, v: str) -> str:
+        cleaned = v.strip()
+        if len(cleaned) < 5:
+            raise ValueError("Rejection reason must contain at least 5 non-whitespace characters explaining what remains unresolved.")
+        return cleaned
+
+
 class CivicCaseRecord(BaseModel):
     """Full civic case representation stored in application layer."""
 
@@ -231,6 +261,12 @@ class CivicCaseRecord(BaseModel):
     location_source: Optional[str] = None
     evidence_uris: List[str] = Field(default_factory=list)
     resolution_notes: List[str] = Field(default_factory=list)
+    resolution_confirmed: bool = False
+    resolution_confirmed_at: Optional[datetime] = None
+    resolution_rejected_at: Optional[datetime] = None
+    citizen_feedback: Optional[str] = None
+    rejection_count: int = 0
+    active_resolution_attempt: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

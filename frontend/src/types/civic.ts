@@ -178,8 +178,22 @@ export interface CivicCaseRecord {
   is_public: boolean;
   evidence_uris: string[];
   resolution_notes: string[];
+  resolution_confirmed?: boolean;
+  resolution_confirmed_at?: string | null;
+  resolution_rejected_at?: string | null;
+  citizen_feedback?: string | null;
+  rejection_count?: number;
+  active_resolution_attempt?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface CitizenResolutionAcceptRequest {
+  feedback?: string | null;
+}
+
+export interface CitizenResolutionRejectRequest {
+  reason: string;
 }
 
 export enum CivicEvidenceType {

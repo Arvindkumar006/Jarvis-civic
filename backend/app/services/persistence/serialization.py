@@ -31,11 +31,25 @@ def case_record_to_dynamodb(record: CivicCaseRecord) -> Dict[str, Any]:
         "is_public": bool(record.is_public),
         "resolution_notes": list(record.resolution_notes or []),
         "evidence_uris": list(record.evidence_uris or []),
+        "resolution_confirmed": bool(record.resolution_confirmed),
+        "rejection_count": int(record.rejection_count),
         "created_at": record.created_at.isoformat(),
         "updated_at": record.updated_at.isoformat(),
     }
 
     # Optional attributes (only include if present to keep DynamoDB items clean)
+    if record.resolution_confirmed_at is not None:
+        item["resolution_confirmed_at"] = record.resolution_confirmed_at.isoformat()
+
+    if record.resolution_rejected_at is not None:
+        item["resolution_rejected_at"] = record.resolution_rejected_at.isoformat()
+
+    if record.citizen_feedback is not None:
+        item["citizen_feedback"] = str(record.citizen_feedback)
+
+    if record.active_resolution_attempt is not None:
+        item["active_resolution_attempt"] = str(record.active_resolution_attempt)
+
     if record.landmark is not None:
         item["landmark"] = str(record.landmark)
 
@@ -106,6 +120,27 @@ def dynamodb_to_case_record(item: Dict[str, Any]) -> CivicCaseRecord:
     lng_val = item.get("longitude")
     lng_float = float(lng_val) if lng_val is not None else None
 
+    # Parse resolution confirmation timestamps
+    res_conf_str = item.get("resolution_confirmed_at")
+    res_conf_at = None
+    if res_conf_str:
+        try:
+            res_conf_at = datetime.fromisoformat(res_conf_str)
+            if res_conf_at.tzinfo is None:
+                res_conf_at = res_conf_at.replace(tzinfo=timezone.utc)
+        except Exception:
+            res_conf_at = None
+
+    res_rej_str = item.get("resolution_rejected_at")
+    res_rej_at = None
+    if res_rej_str:
+        try:
+            res_rej_at = datetime.fromisoformat(res_rej_str)
+            if res_rej_at.tzinfo is None:
+                res_rej_at = res_rej_at.replace(tzinfo=timezone.utc)
+        except Exception:
+            res_rej_at = None
+
     return CivicCaseRecord(
         case_id=item["case_id"],
         owner_id=item["owner_id"],
@@ -124,6 +159,12 @@ def dynamodb_to_case_record(item: Dict[str, Any]) -> CivicCaseRecord:
         location_source=item.get("location_source"),
         resolution_notes=list(item.get("resolution_notes") or []),
         evidence_uris=list(item.get("evidence_uris") or []),
+        resolution_confirmed=bool(item.get("resolution_confirmed", False)),
+        resolution_confirmed_at=res_conf_at,
+        resolution_rejected_at=res_rej_at,
+        citizen_feedback=item.get("citizen_feedback"),
+        rejection_count=int(item.get("rejection_count", 0)),
+        active_resolution_attempt=item.get("active_resolution_attempt"),
         created_at=created_at,
         updated_at=updated_at,
     )

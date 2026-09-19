@@ -147,6 +147,40 @@ class NotificationWorkerDispatcher:
             return self._notif_service.get_case_notifications(case.case_id)
         return self._notif_service.dispatch_resolution_ready(case, proposed_notes)
 
+    def dispatch_resolution_confirmed(
+        self,
+        case: CivicCaseRecord,
+        feedback: Optional[str] = None,
+    ) -> List[NotificationRecord]:
+        """Dispatch citizen resolution confirmed notifications."""
+        if settings.NOTIFICATION_EXECUTION_MODE == "SAM_LOCAL":
+            event = self.create_work_event(
+                case_id=case.case_id,
+                event_type=WorkerEventType.RESOLUTION_CONFIRMED,
+                payload={"feedback": feedback},
+            )
+            resp = self.invoke_sam_local(event)
+            logger.info("SAM_LOCAL dispatch_resolution_confirmed response: %s", resp.status)
+            return self._notif_service.get_case_notifications(case.case_id)
+        return self._notif_service.dispatch_resolution_confirmed(case, feedback)
+
+    def dispatch_resolution_rejected(
+        self,
+        case: CivicCaseRecord,
+        reason: str,
+    ) -> List[NotificationRecord]:
+        """Dispatch citizen resolution rejected notifications."""
+        if settings.NOTIFICATION_EXECUTION_MODE == "SAM_LOCAL":
+            event = self.create_work_event(
+                case_id=case.case_id,
+                event_type=WorkerEventType.RESOLUTION_REJECTED,
+                payload={"reason": reason, "rejection_count": case.rejection_count},
+            )
+            resp = self.invoke_sam_local(event)
+            logger.info("SAM_LOCAL dispatch_resolution_rejected response: %s", resp.status)
+            return self._notif_service.get_case_notifications(case.case_id)
+        return self._notif_service.dispatch_resolution_rejected(case, reason)
+
     @staticmethod
     def sync_backend_packaging() -> None:
         """Synchronize authoritative backend/app code into sam/src/notification_worker/backend/app.

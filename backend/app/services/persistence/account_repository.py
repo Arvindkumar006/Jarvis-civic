@@ -84,6 +84,18 @@ class LocalAccountRepository(AccountRepository):
                 created_at=now,
                 updated_at=now,
             ),
+            # 1b. Second Citizen (for cross-citizen authorization boundary tests)
+            UserAccount(
+                principal_id="citizen-02",
+                email="citizen2@jarviscivic.local",
+                password_hash=default_hash,
+                display_name="Second Citizen User",
+                role=ApplicationRole.CITIZEN,
+                department=None,
+                is_active=True,
+                created_at=now,
+                updated_at=now,
+            ),
             # 2. Authority Officer — Drainage & Stormwater
             UserAccount(
                 principal_id="authority-officer-01",

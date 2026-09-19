@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search,
   ShieldAlert,
@@ -17,6 +17,11 @@ import {
   AlertTriangle,
   FileCheck2,
   Send,
+  ThumbsUp,
+  ThumbsDown,
+  CheckCircle2,
+  XCircle,
+  Info,
 } from 'lucide-react';
 import {
   ApplicationRole,
@@ -24,10 +29,12 @@ import {
   CaseHistoryItem,
   CaseStatus,
   CivicCaseRecord,
+  CivicEvidenceType,
   ControlledDepartment,
+  EvidenceResponse,
   PublicTrackingProjection,
 } from '../../types/civic';
-import { auditApi, casesApi, trackingApi } from '../../services/api';
+import { auditApi, casesApi, evidenceApi, trackingApi } from '../../services/api';
 import { CivicMap, getApproxCoordinates, MapMarkerItem } from '../Map/CivicMap';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -81,11 +88,7 @@ const VALID_NEXT_TRANSITIONS: Record<
     label: 'COMMENCE REVIEW',
     actionDesc: 'Initiate formal departmental triage and municipal investigation.',
   },
-  [CaseStatus.UNDER_REVIEW]: {
-    nextStatus: CaseStatus.RESOLVED,
-    label: 'RECORD RESOLUTION',
-    actionDesc: 'Certify civic work completion and record workflow resolution.',
-  },
+  [CaseStatus.UNDER_REVIEW]: null, // GATED: Closure transitions directly via authenticated citizen resolution confirmation
   [CaseStatus.RESOLVED]: null,
 };
 
@@ -156,6 +159,42 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
   const [auditRestricted, setAuditRestricted] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
 
+  // Evidence & Citizen Resolution State
+  const [caseEvidence, setCaseEvidence] = useState<EvidenceResponse[]>([]);
+  const [acceptModalOpen, setAcceptModalOpen] = useState(false);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [citizenFeedback, setCitizenFeedback] = useState('');
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [resolutionActionLoading, setResolutionActionLoading] = useState(false);
+  const [resolutionActionError, setResolutionActionError] = useState<string | null>(null);
+
+  // Filter resolution evidence and determine active resolution attempt
+  const resolutionEvidences = useMemo(() => {
+    return caseEvidence.filter(
+      (ev) => ev.evidence_type === CivicEvidenceType.RESOLUTION_EVIDENCE || (ev.evidence_type as string) === 'RESOLUTION_EVIDENCE'
+    );
+  }, [caseEvidence]);
+
+  const activeResolutionEvidence = useMemo(() => {
+    if (resolutionEvidences.length === 0) return null;
+    const activeAttempt = caseRecord?.active_resolution_attempt;
+    if (activeAttempt) {
+      return (
+        resolutionEvidences.find(
+          (ev) => ev.resolution_attempt === activeAttempt || ev.evidence_id === activeAttempt
+        ) || resolutionEvidences[resolutionEvidences.length - 1]
+      );
+    }
+    return resolutionEvidences[resolutionEvidences.length - 1];
+  }, [resolutionEvidences, caseRecord?.active_resolution_attempt]);
+
+  const isCaseOwner = Boolean(
+    caseRecord &&
+    effectiveRole === ApplicationRole.CITIZEN &&
+    effectivePid &&
+    caseRecord.owner_id === effectivePid
+  );
+
   // Auto-track initialCaseId if provided
   useEffect(() => {
     if (initialCaseId && initialCaseId.trim().length > 0) {
@@ -167,13 +206,15 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
   // Accessibility: Close transition confirmation modal on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && confirmModalOpen) {
-        setConfirmModalOpen(false);
+      if (e.key === 'Escape') {
+        if (confirmModalOpen) setConfirmModalOpen(false);
+        if (acceptModalOpen) setAcceptModalOpen(false);
+        if (rejectModalOpen) setRejectModalOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [confirmModalOpen]);
+  }, [confirmModalOpen, acceptModalOpen, rejectModalOpen]);
 
   // Main Tracking Handler
   const handleTrack = async (targetId: string) => {
@@ -219,6 +260,14 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
       setCaseRecord(null);
     }
 
+    // Try loading case evidence
+    try {
+      const evList = await evidenceApi.listEvidence(caseId);
+      setCaseEvidence(evList);
+    } catch {
+      setCaseEvidence([]);
+    }
+
     // Try loading sanitized history
     try {
       const hist = await casesApi.getHistory(
@@ -235,6 +284,60 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
     // If currently on AUDIT mode, refresh audit trail
     if (activeMode === 'AUDIT') {
       await fetchAuditTrail(caseId);
+    }
+  };
+
+  // Citizen Accept Resolution Handler (Direct Closure Gate)
+  // SECURITY: Identity is resolved exclusively from the server-side session cookie.
+  // No role/principal simulation headers are forwarded.
+  const handleAcceptResolution = async () => {
+    if (!projection) return;
+    setResolutionActionLoading(true);
+    setResolutionActionError(null);
+    try {
+      const updated = await casesApi.acceptResolution(
+        projection.case_id,
+        { feedback: citizenFeedback.trim() || undefined }
+      );
+      setCaseRecord(updated);
+      setProjection((prev) => (prev ? { ...prev, status: updated.status } : null));
+      setWorkflowSuccessMsg('Resolution confirmed! Civic docket is now RESOLVED and closed.');
+      setAcceptModalOpen(false);
+      setCitizenFeedback('');
+      await loadSupplementalData(projection.case_id);
+    } catch (err: any) {
+      setResolutionActionError(err.message || 'Failed to accept resolution.');
+    } finally {
+      setResolutionActionLoading(false);
+    }
+  };
+
+  // Citizen Reject Resolution Handler
+  // SECURITY: Identity is resolved exclusively from the server-side session cookie.
+  // No role/principal simulation headers are forwarded.
+  const handleRejectResolution = async () => {
+    if (!projection) return;
+    if (rejectionReason.trim().length < 5) {
+      setResolutionActionError('Please provide a substantive reason (at least 5 characters) explaining what remains unresolved.');
+      return;
+    }
+    setResolutionActionLoading(true);
+    setResolutionActionError(null);
+    try {
+      const updated = await casesApi.rejectResolution(
+        projection.case_id,
+        { reason: rejectionReason.trim() }
+      );
+      setCaseRecord(updated);
+      setProjection((prev) => (prev ? { ...prev, status: updated.status } : null));
+      setWorkflowSuccessMsg('Resolution rejected. The case remains in UNDER_REVIEW for municipal rework.');
+      setRejectModalOpen(false);
+      setRejectionReason('');
+      await loadSupplementalData(projection.case_id);
+    } catch (err: any) {
+      setResolutionActionError(err.message || 'Failed to reject resolution.');
+    } finally {
+      setResolutionActionLoading(false);
     }
   };
 
@@ -714,6 +817,152 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                 </div>
               </div>
 
+              {/* Phase 8.8: Citizen Resolution Review & Closure Gate Card */}
+              {(activeResolutionEvidence || caseRecord?.resolution_confirmed || (caseRecord?.rejection_count && caseRecord.rejection_count > 0)) && (
+                <div
+                  className={`citizen-resolution-review-card ${
+                    projection.status === CaseStatus.RESOLVED && caseRecord?.resolution_confirmed
+                      ? 'confirmed'
+                      : projection.status === CaseStatus.UNDER_REVIEW && caseRecord?.rejection_count && caseRecord.rejection_count > 0 && !activeResolutionEvidence
+                      ? 'rejected'
+                      : 'pending'
+                  } animate-fade-in`}
+                >
+                  <div className="res-review-header">
+                    <div>
+                      <span className="technical-label">
+                        {projection.status === CaseStatus.RESOLVED && caseRecord?.resolution_confirmed
+                          ? 'CITIZEN RESOLUTION CONFIRMED // FINAL CLOSURE'
+                          : projection.status === CaseStatus.UNDER_REVIEW && caseRecord?.rejection_count && caseRecord.rejection_count > 0 && !activeResolutionEvidence
+                          ? 'RESOLUTION REWORK REQUIRED // CITIZEN FEEDBACK'
+                          : 'CITIZEN RESOLUTION REVIEW REQUIRED'}
+                      </span>
+                      <h4 className="res-review-title">
+                        {projection.status === CaseStatus.RESOLVED && caseRecord?.resolution_confirmed
+                          ? 'Resolution Confirmed by Citizen'
+                          : projection.status === CaseStatus.UNDER_REVIEW && caseRecord?.rejection_count && caseRecord.rejection_count > 0 && !activeResolutionEvidence
+                          ? 'Resolution Rejected by Citizen — Rework Required'
+                          : 'Resolution Evidence Submitted — Citizen Review Required'}
+                      </h4>
+                      <p className="res-review-desc">
+                        {projection.status === CaseStatus.RESOLVED && caseRecord?.resolution_confirmed
+                          ? 'The citizen case owner has verified evidence and accepted resolution. The docket is officially RESOLVED and closed.'
+                          : projection.status === CaseStatus.UNDER_REVIEW && caseRecord?.rejection_count && caseRecord.rejection_count > 0 && !activeResolutionEvidence
+                          ? `The citizen rejected the previous resolution attempt. Corrective action is required by ${projection.recommended_department.replace(/_/g, ' ')}.`
+                          : 'Department authority has submitted resolution evidence. Review the evidence, deterministic validation, and AI advisory assessment below to confirm closure or request rework.'}
+                      </p>
+                    </div>
+                    <span className="privacy-shield-pill">
+                      {projection.status === CaseStatus.RESOLVED ? 'CASE RESOLVED' : 'CLOSURE GATE'}
+                    </span>
+                  </div>
+
+                  {/* Resolution Evidence Details */}
+                  {activeResolutionEvidence && (
+                    <div className="res-evidence-list">
+                      <div className="res-evidence-item">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <Paperclip size={14} color="var(--civic-cyan)" />
+                          <span style={{ fontWeight: 600 }}>{activeResolutionEvidence.filename}</span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            ({(activeResolutionEvidence.size_bytes / 1024).toFixed(1)} KB)
+                          </span>
+                        </div>
+                        <div className="res-evidence-meta">
+                          <span
+                            className={`res-pill ${
+                              activeResolutionEvidence.validation_status === 'VALID' ? 'valid' : 'ai-rejected'
+                            }`}
+                          >
+                            Evidence validation: {activeResolutionEvidence.validation_status}
+                          </span>
+                          <span
+                            className={`res-pill ${
+                              activeResolutionEvidence.verification_status === 'VERIFIED'
+                                ? 'ai-verified'
+                                : activeResolutionEvidence.verification_status === 'UNCERTAIN'
+                                ? 'ai-uncertain'
+                                : 'ai-rejected'
+                            }`}
+                          >
+                            AI-assisted assessment: {activeResolutionEvidence.verification_status}
+                            {activeResolutionEvidence.ai_confidence != null && (
+                              ` (${Math.round(activeResolutionEvidence.ai_confidence * 100)}%)`
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Advisory Disclaimer */}
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)', fontStyle: 'italic', paddingLeft: '0.2rem' }}>
+                        Advisory Disclaimer: Evidence validation reflects deterministic integrity (format, size, hash). AI-assisted assessment is non-binding and advisory. Only the citizen case owner has the final closure authority.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Citizen Rejection Note if exists */}
+                  {caseRecord?.citizen_feedback && (
+                    <div className="rejection-reason-quote">
+                      <strong>Citizen Feedback / Rework Request:</strong> "{caseRecord.citizen_feedback}"
+                      {caseRecord.rejection_count != null && caseRecord.rejection_count > 0 && (
+                        <span style={{ marginLeft: '0.5rem', color: 'var(--civic-amber)', fontSize: '0.72rem' }}>
+                          (Rejection Count: {caseRecord.rejection_count})
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Authority Resolution Notes / Claim */}
+                  {caseRecord?.resolution_notes && caseRecord.resolution_notes.length > 0 && (
+                    <div className="rejection-reason-quote" style={{ borderLeftColor: 'var(--civic-cyan)' }}>
+                      <strong>Authority Resolution Claim:</strong> "{caseRecord.resolution_notes[caseRecord.resolution_notes.length - 1]}"
+                    </div>
+                  )}
+
+                  {/* Citizen Action Buttons (Under Review + Owner + Deterministic Valid Evidence) */}
+                  {projection.status === CaseStatus.UNDER_REVIEW && activeResolutionEvidence && (
+                    <div className="res-actions-row">
+                      {isCaseOwner ? (
+                        <>
+                          <button
+                            type="button"
+                            className="btn-accept-resolution"
+                            onClick={() => setAcceptModalOpen(true)}
+                            disabled={activeResolutionEvidence.validation_status !== 'VALID' || resolutionActionLoading}
+                          >
+                            <CheckCircle2 size={15} />
+                            <span>ACCEPT RESOLUTION</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-reject-resolution"
+                            onClick={() => setRejectModalOpen(true)}
+                            disabled={resolutionActionLoading}
+                          >
+                            <XCircle size={15} />
+                            <span>REJECT / REQUEST REWORK</span>
+                          </button>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                          {effectiveRole === ApplicationRole.CITIZEN
+                            ? 'You are signed in as a citizen, but only the specific case owner can accept or reject this resolution.'
+                            : 'Awaiting citizen case-owner resolution review. Authority and administrative accounts cannot confirm resolution on behalf of the citizen.'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Confirmed State Summary */}
+                  {projection.status === CaseStatus.RESOLVED && caseRecord?.resolution_confirmed && (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--civic-emerald)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem' }}>
+                      <CheckCircle2 size={15} />
+                      <span>Citizen resolution confirmation: ACCEPTED ({caseRecord.resolution_confirmed_at ? new Date(caseRecord.resolution_confirmed_at).toLocaleString() : 'Confirmed'})</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Split Layout: Left Lifecycle Journey, Right Case Map */}
               <div className="workspace-split-body">
                 {/* Left: Connected 5-Stage Case Journey */}
@@ -870,7 +1119,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                   <div className="stage-badge-node next">
                     <span className="s-label">ALLOWED NEXT STAGE</span>
                     <span className="s-val">
-                      {nextTransition ? nextTransition.nextStatus.replace(/_/g, ' ') : 'LIFECYCLE COMPLETED'}
+                      {nextTransition
+                        ? nextTransition.nextStatus.replace(/_/g, ' ')
+                        : projection.status === CaseStatus.UNDER_REVIEW
+                        ? 'CITIZEN CONFIRMATION REQUIRED'
+                        : 'LIFECYCLE COMPLETED'}
                     </span>
                   </div>
                 </div>
@@ -891,9 +1144,42 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                       <ArrowRight size={14} />
                     </button>
                   </div>
+                ) : projection.status === CaseStatus.UNDER_REVIEW ? (
+                  <div className="authority-resolution-status-box">
+                    <div className={`gate-status-tag ${
+                      caseRecord?.rejection_count && caseRecord.rejection_count > 0 && !activeResolutionEvidence
+                        ? 'rejected'
+                        : activeResolutionEvidence
+                        ? 'pending'
+                        : 'no-evidence'
+                    }`}>
+                      {caseRecord?.rejection_count && caseRecord.rejection_count > 0 && !activeResolutionEvidence ? (
+                        <>
+                          <AlertTriangle size={16} color="var(--civic-amber)" />
+                          <span>Citizen Rejected Resolution — Corrective Action Required</span>
+                        </>
+                      ) : (
+                        <>
+                          <Clock size={16} color="var(--civic-cyan)" />
+                          <span>Awaiting Citizen Confirmation</span>
+                        </>
+                      )}
+                    </div>
+                    <p className="gate-note">
+                      {caseRecord?.rejection_count && caseRecord.rejection_count > 0 && !activeResolutionEvidence
+                        ? `The citizen rejected the previous resolution attempt ("${caseRecord.citizen_feedback || 'Rework requested'}"). Case closure is strictly gated on citizen acceptance. Corrective action and new resolution evidence must be submitted.`
+                        : 'Resolution closure is strictly citizen-gated. Authority officers cannot bypass citizen confirmation or force status to RESOLVED.'}
+                    </p>
+                  </div>
                 ) : (
-                  <div style={{ fontSize: '0.8rem', color: 'var(--civic-emerald)', fontStyle: 'italic' }}>
-                    ✓ This case has reached final resolution (RESOLVED). No further forward transitions are possible.
+                  <div className="authority-resolution-status-box">
+                    <div className="gate-status-tag confirmed">
+                      <CheckCircle2 size={16} color="var(--civic-emerald)" />
+                      <span>Citizen Confirmed Resolution — Case Closed</span>
+                    </div>
+                    <p className="gate-note">
+                      ✓ The case owner citizen confirmed resolution on {caseRecord?.resolution_confirmed_at ? new Date(caseRecord.resolution_confirmed_at).toLocaleString() : 'docket'}. The case is officially RESOLVED and closed.
+                    </p>
                   </div>
                 )}
               </div>
@@ -1135,6 +1421,128 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                 disabled={workflowActionLoading}
               >
                 {workflowActionLoading ? 'RECORDING TRANSITION...' : 'CONFIRM & ADVANCE'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CITIZEN ACCEPT RESOLUTION MODAL */}
+      {acceptModalOpen && (
+        <div className="confirm-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="accept-resolution-title">
+          <div className="confirm-dialog-box crosshair-corner animate-fade-in">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <CheckCircle2 size={18} color="var(--civic-emerald)" />
+              <h3 id="accept-resolution-title" style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+                Confirm Citizen Resolution & Close Case
+              </h3>
+            </div>
+
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+              Are you satisfied that the civic issue on docket <strong>{projection?.case_id}</strong> has been resolved?
+              Accepting will transition the case directly to <strong style={{ color: 'var(--civic-emerald)' }}>RESOLVED</strong>.
+              This decision is final and recorded in the append-only audit trail.
+            </div>
+
+            {resolutionActionError && (
+              <div className="tracking-alert-card" role="alert" style={{ margin: '0.5rem 0' }}>
+                <AlertCircle size={14} />
+                <div style={{ fontSize: '0.8rem' }}>{resolutionActionError}</div>
+              </div>
+            )}
+
+            <div className="sim-field-group">
+              <label className="sim-field-label">Citizen Feedback (Optional)</label>
+              <input
+                type="text"
+                className="sim-field-input"
+                placeholder="Share any comments on the resolution quality..."
+                value={citizenFeedback}
+                onChange={(e) => setCitizenFeedback(e.target.value)}
+                disabled={resolutionActionLoading}
+              />
+            </div>
+
+            <div className="confirm-dialog-actions">
+              <button
+                type="button"
+                className="btn-dialog-cancel"
+                onClick={() => setAcceptModalOpen(false)}
+                disabled={resolutionActionLoading}
+              >
+                CANCEL
+              </button>
+              <button
+                type="button"
+                className="btn-dialog-confirm"
+                style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+                onClick={handleAcceptResolution}
+                disabled={resolutionActionLoading}
+              >
+                {resolutionActionLoading ? 'CONFIRMING CLOSURE...' : 'CONFIRM RESOLUTION & CLOSE'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CITIZEN REJECT RESOLUTION MODAL */}
+      {rejectModalOpen && (
+        <div className="confirm-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="reject-resolution-title">
+          <div className="confirm-dialog-box crosshair-corner animate-fade-in">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <XCircle size={18} color="#f87171" />
+              <h3 id="reject-resolution-title" style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+                Reject Resolution & Request Rework
+              </h3>
+            </div>
+
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+              Please explain what remains unresolved on docket <strong>{projection?.case_id}</strong>.
+              The case will remain <strong style={{ color: 'var(--civic-amber)' }}>UNDER_REVIEW</strong> and the municipal department will be notified for corrective action.
+            </div>
+
+            {resolutionActionError && (
+              <div className="tracking-alert-card" role="alert" style={{ margin: '0.5rem 0' }}>
+                <AlertCircle size={14} />
+                <div style={{ fontSize: '0.8rem' }}>{resolutionActionError}</div>
+              </div>
+            )}
+
+            <div className="sim-field-group">
+              <label className="sim-field-label">
+                Substantive Rejection Reason <span style={{ color: '#f87171' }}>* (Minimum 5 characters)</span>
+              </label>
+              <textarea
+                className="sim-field-input"
+                style={{ minHeight: '80px', resize: 'vertical' }}
+                placeholder="Explain why the resolution is incomplete or unsatisfactory..."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                disabled={resolutionActionLoading}
+              />
+              <div style={{ fontSize: '0.72rem', color: rejectionReason.trim().length >= 5 ? 'var(--civic-emerald)' : 'var(--text-dim)' }}>
+                {rejectionReason.trim().length}/5 characters minimum
+              </div>
+            </div>
+
+            <div className="confirm-dialog-actions">
+              <button
+                type="button"
+                className="btn-dialog-cancel"
+                onClick={() => setRejectModalOpen(false)}
+                disabled={resolutionActionLoading}
+              >
+                CANCEL
+              </button>
+              <button
+                type="button"
+                className="btn-dialog-confirm"
+                style={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' }}
+                onClick={handleRejectResolution}
+                disabled={resolutionActionLoading || rejectionReason.trim().length < 5}
+              >
+                {resolutionActionLoading ? 'SUBMITTING REJECTION...' : 'REJECT RESOLUTION'}
               </button>
             </div>
           </div>

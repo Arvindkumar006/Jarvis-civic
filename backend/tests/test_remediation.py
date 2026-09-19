@@ -363,11 +363,29 @@ def test_complete_five_stage_durable_lifecycle_history():
     )
     assert r4.status_code == 200
 
-    # Stage 5: RESOLVED
-    r5 = client.patch(
+    # Stage 5: RESOLVED (direct authority PATCH blocked by citizen closure gate)
+    r5_blocked = client.patch(
         f"/api/cases/{case_id}/status",
         json={"status": "RESOLVED", "note": "Stage 5 resolved"},
         headers=officer_headers,
+    )
+    assert r5_blocked.status_code == 409
+
+    # Officer uploads resolution evidence
+    files = {"file": ("pothole_fixed.jpg", io.BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00img"), "image/jpeg")}
+    up = client.post(
+        f"/api/cases/{case_id}/evidence",
+        files=files,
+        data={"evidence_type": "RESOLUTION_EVIDENCE"},
+        headers=officer_headers,
+    )
+    assert up.status_code == 201
+
+    # Citizen confirms resolution -> case transitions to RESOLVED
+    r5 = client.post(
+        f"/api/cases/{case_id}/resolution/accept",
+        json={"feedback": "Stage 5 resolved"},
+        headers={"X-Principal-Id": "cit-stage-test", "X-Principal-Role": "CITIZEN"},
     )
     assert r5.status_code == 200
 

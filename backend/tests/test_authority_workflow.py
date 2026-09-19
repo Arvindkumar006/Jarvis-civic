@@ -11,6 +11,7 @@ Validates:
 8. Append-only audit record creation after successful mutations and integrity on rejected mutations
 """
 
+import io
 import pytest
 from fastapi.testclient import TestClient
 
@@ -126,15 +127,33 @@ def test_canonical_forward_lifecycle_transitions():
     assert r3.status_code == 200
     assert r3.json()["status"] == "UNDER_REVIEW"
 
-    # Step 4: UNDER_REVIEW -> RESOLVED
-    r4 = client.patch(
+    # Step 4: Direct authority PATCH to RESOLVED is blocked with HTTP 409 (Citizen Gate)
+    r4_blocked = client.patch(
         f"/api/cases/{case_id}/status",
         json={"status": "RESOLVED", "note": "Drain de-silted and flow restored"},
         headers=OFFICER_DRAINAGE_HEADERS,
     )
+    assert r4_blocked.status_code == 409
+
+    # Officer uploads resolution evidence
+    files = {"file": ("drain_fixed.jpg", io.BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00img"), "image/jpeg")}
+    up = client.post(
+        f"/api/cases/{case_id}/evidence",
+        files=files,
+        data={"evidence_type": "RESOLUTION_EVIDENCE"},
+        headers=OFFICER_DRAINAGE_HEADERS,
+    )
+    assert up.status_code == 201
+
+    # Citizen confirms resolution -> case transitions directly to RESOLVED
+    r4 = client.post(
+        f"/api/cases/{case_id}/resolution/accept",
+        json={"feedback": "Drain de-silted and flow restored"},
+        headers=CITIZEN_HEADERS,
+    )
     assert r4.status_code == 200
     assert r4.json()["status"] == "RESOLVED"
-    assert "Drain de-silted and flow restored" in r4.json()["resolution_notes"]
+    assert r4.json()["resolution_confirmed"] is True
 
 
 def test_skip_lifecycle_transition_rejected_with_409():

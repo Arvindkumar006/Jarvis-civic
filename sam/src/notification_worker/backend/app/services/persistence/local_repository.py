@@ -288,6 +288,88 @@ class LocalCaseRepository(CaseRepository):
             record.updated_at = datetime.now(timezone.utc)
             return record
 
+    def confirm_and_resolve_case(
+        self,
+        case_id: str,
+        feedback: Optional[str] = None,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        with self._lock:
+            record = self._cases.get(case_id)
+            if not record:
+                return None
+            now = datetime.now(timezone.utc)
+            record.resolution_confirmed = True
+            record.resolution_confirmed_at = now
+            if feedback:
+                record.citizen_feedback = feedback
+            record.status = CaseStatus.RESOLVED
+            record.updated_at = now
+
+            if case_id not in self._case_history:
+                self._case_history[case_id] = []
+            self._case_history[case_id].append(
+                CaseHistoryItem(
+                    milestone_id=f"ms-{secrets.token_hex(6)}",
+                    status=CaseStatus.RESOLVED.value,
+                    label="Resolution Confirmed & Closed",
+                    timestamp=now,
+                    department=record.department,
+                    description="Citizen confirmed resolution; case transitioned to Resolved",
+                    actor_role=actor_label or "CITIZEN",
+                    note=feedback,
+                )
+            )
+            return record
+
+    def reject_resolution(
+        self,
+        case_id: str,
+        reason: str,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        with self._lock:
+            record = self._cases.get(case_id)
+            if not record:
+                return None
+            now = datetime.now(timezone.utc)
+            record.resolution_confirmed = False
+            record.resolution_rejected_at = now
+            record.rejection_count += 1
+            record.citizen_feedback = reason
+            record.status = CaseStatus.UNDER_REVIEW
+            record.updated_at = now
+            record.resolution_notes.append(f"Citizen Rejected Resolution: {reason}")
+
+            if case_id not in self._case_history:
+                self._case_history[case_id] = []
+            self._case_history[case_id].append(
+                CaseHistoryItem(
+                    milestone_id=f"ms-{secrets.token_hex(6)}",
+                    status=CaseStatus.UNDER_REVIEW.value,
+                    label="Resolution Rejected by Citizen",
+                    timestamp=now,
+                    department=record.department,
+                    description=f"Citizen rejected resolution: {reason}",
+                    actor_role=actor_label or "CITIZEN",
+                    note=reason,
+                )
+            )
+            return record
+
+    def set_active_resolution_attempt(
+        self,
+        case_id: str,
+        attempt_id: str,
+    ) -> Optional[CivicCaseRecord]:
+        with self._lock:
+            record = self._cases.get(case_id)
+            if not record:
+                return None
+            record.active_resolution_attempt = attempt_id
+            record.updated_at = datetime.now(timezone.utc)
+            return record
+
     def list_all_cases(self) -> List[CivicCaseRecord]:
         with self._lock:
             return list(self._cases.values())

@@ -439,6 +439,116 @@ class NotificationService:
             records.append(rec)
         return records
 
+    def dispatch_resolution_confirmed(
+        self,
+        case: CivicCaseRecord,
+        feedback: Optional[str] = None,
+    ) -> List[NotificationRecord]:
+        """Dispatch notifications upon citizen resolution confirmation (Citizen receipt + Authority alert)."""
+        records: List[NotificationRecord] = []
+        tracking_url = f"{settings.ALLOWED_ORIGINS[0]}/#track/{case.case_id}"
+
+        # 1. Citizen Confirmation Receipt
+        citizen_recipient = self._resolver.resolve_citizen_recipient(case)
+        if citizen_recipient:
+            subject, text_body, html_body = self._templates.render_resolution_confirmed_citizen(
+                case=case,
+                recipient_name=citizen_recipient.display_name,
+                feedback=feedback,
+                tracking_url=tracking_url,
+            )
+            rec = self._send_individual_notification(
+                case=case,
+                event_type=NotificationEventType.RESOLUTION_CONFIRMED,
+                recipient=citizen_recipient,
+                unroutable_role_label="CITIZEN",
+                subject=subject,
+                text_body=text_body,
+                html_body=html_body,
+                template_name="resolution_confirmed_citizen",
+                event_version=f"confirmed-attempt-{case.rejection_count + 1}",
+                metadata={"feedback": feedback},
+            )
+            records.append(rec)
+
+        # 2. Responsible Authority Alert
+        authority_recipient = self._resolver.resolve_authority_recipient(case)
+        if authority_recipient:
+            subject, text_body, html_body = self._templates.render_resolution_confirmed_authority(
+                case=case,
+                recipient_name=authority_recipient.display_name,
+                feedback=feedback,
+            )
+            rec = self._send_individual_notification(
+                case=case,
+                event_type=NotificationEventType.RESOLUTION_CONFIRMED,
+                recipient=authority_recipient,
+                unroutable_role_label="AUTHORITY_OFFICER",
+                subject=subject,
+                text_body=text_body,
+                html_body=html_body,
+                template_name="resolution_confirmed_authority",
+                event_version=f"confirmed-attempt-{case.rejection_count + 1}",
+                metadata={"feedback": feedback},
+            )
+            records.append(rec)
+
+        return records
+
+    def dispatch_resolution_rejected(
+        self,
+        case: CivicCaseRecord,
+        reason: str,
+    ) -> List[NotificationRecord]:
+        """Dispatch notifications upon citizen resolution rejection (Citizen receipt + Authority rework alert)."""
+        records: List[NotificationRecord] = []
+
+        # 1. Citizen Rejection Acknowledgment
+        citizen_recipient = self._resolver.resolve_citizen_recipient(case)
+        if citizen_recipient:
+            subject, text_body, html_body = self._templates.render_resolution_rejected_citizen(
+                case=case,
+                recipient_name=citizen_recipient.display_name,
+                reason=reason,
+            )
+            rec = self._send_individual_notification(
+                case=case,
+                event_type=NotificationEventType.RESOLUTION_REJECTED,
+                recipient=citizen_recipient,
+                unroutable_role_label="CITIZEN",
+                subject=subject,
+                text_body=text_body,
+                html_body=html_body,
+                template_name="resolution_rejected_citizen",
+                event_version=f"rejected-attempt-{case.rejection_count}",
+                metadata={"reason": reason, "rejection_count": case.rejection_count},
+            )
+            records.append(rec)
+
+        # 2. Responsible Authority Rework Alert
+        authority_recipient = self._resolver.resolve_authority_recipient(case)
+        if authority_recipient:
+            subject, text_body, html_body = self._templates.render_resolution_rejected_authority(
+                case=case,
+                recipient_name=authority_recipient.display_name,
+                reason=reason,
+            )
+            rec = self._send_individual_notification(
+                case=case,
+                event_type=NotificationEventType.RESOLUTION_REJECTED,
+                recipient=authority_recipient,
+                unroutable_role_label="AUTHORITY_OFFICER",
+                subject=subject,
+                text_body=text_body,
+                html_body=html_body,
+                template_name="resolution_rejected_authority",
+                event_version=f"rejected-attempt-{case.rejection_count}",
+                metadata={"reason": reason, "rejection_count": case.rejection_count},
+            )
+            records.append(rec)
+
+        return records
+
     def get_case_notifications(self, case_id: str) -> List[NotificationRecord]:
         """Retrieve authoritative notification records for a case."""
         return self._repo.list_by_case(case_id)

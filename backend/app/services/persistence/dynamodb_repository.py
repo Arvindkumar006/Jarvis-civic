@@ -314,6 +314,86 @@ class DynamoDBCaseRepository(CaseRepository):
             logger.error("DynamoDB add_evidence_uri failed for '%s': %s", case_id, exc)
             raise
 
+    def confirm_and_resolve_case(
+        self,
+        case_id: str,
+        feedback: Optional[str] = None,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        record = self.get_case(case_id)
+        if not record:
+            return None
+        now = datetime.now(timezone.utc)
+        record.resolution_confirmed = True
+        record.resolution_confirmed_at = now
+        if feedback:
+            record.citizen_feedback = feedback
+        record.status = CaseStatus.RESOLVED
+        record.updated_at = now
+
+        item = case_record_to_dynamodb(record)
+        try:
+            self.table.put_item(
+                Item=item,
+                ConditionExpression="attribute_exists(case_id)",
+            )
+            return record
+        except ClientError as exc:
+            logger.error("DynamoDB confirm_and_resolve_case failed for '%s': %s", case_id, exc)
+            raise
+
+    def reject_resolution(
+        self,
+        case_id: str,
+        reason: str,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        record = self.get_case(case_id)
+        if not record:
+            return None
+        now = datetime.now(timezone.utc)
+        record.resolution_confirmed = False
+        record.resolution_rejected_at = now
+        record.rejection_count += 1
+        record.citizen_feedback = reason
+        record.status = CaseStatus.UNDER_REVIEW
+        record.resolution_notes.append(f"Citizen Rejected Resolution: {reason}")
+        record.updated_at = now
+
+        item = case_record_to_dynamodb(record)
+        try:
+            self.table.put_item(
+                Item=item,
+                ConditionExpression="attribute_exists(case_id)",
+            )
+            return record
+        except ClientError as exc:
+            logger.error("DynamoDB reject_resolution failed for '%s': %s", case_id, exc)
+            raise
+
+    def set_active_resolution_attempt(
+        self,
+        case_id: str,
+        attempt_id: str,
+    ) -> Optional[CivicCaseRecord]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            self.table.update_item(
+                Key={"case_id": case_id},
+                UpdateExpression="SET active_resolution_attempt = :att, updated_at = :updated_at",
+                ConditionExpression="attribute_exists(case_id)",
+                ExpressionAttributeValues={
+                    ":att": attempt_id,
+                    ":updated_at": now_iso,
+                },
+            )
+            return self.get_case(case_id)
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                return None
+            logger.error("DynamoDB set_active_resolution_attempt failed for '%s': %s", case_id, exc)
+            raise
+
     def list_all_cases(self) -> List[CivicCaseRecord]:
         """Scan and retrieve all civic cases across all DynamoDB pagination pages."""
         records: List[CivicCaseRecord] = []

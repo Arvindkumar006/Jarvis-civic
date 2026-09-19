@@ -98,6 +98,40 @@ class CaseServiceFacade:
         """Attach an evidence storage URI to the case."""
         return self._case_repo.add_evidence_uri(case_id, uri=uri)
 
+    def confirm_and_resolve_case(
+        self,
+        case_id: str,
+        feedback: Optional[str] = None,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        """Atomically confirm resolution and transition case to RESOLVED."""
+        return self._case_repo.confirm_and_resolve_case(
+            case_id=case_id,
+            feedback=feedback,
+            actor_label=actor_label,
+        )
+
+    def reject_resolution(
+        self,
+        case_id: str,
+        reason: str,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        """Record citizen rejection of resolution attempt and increment rejection_count."""
+        return self._case_repo.reject_resolution(
+            case_id=case_id,
+            reason=reason,
+            actor_label=actor_label,
+        )
+
+    def set_active_resolution_attempt(
+        self,
+        case_id: str,
+        attempt_id: str,
+    ) -> Optional[CivicCaseRecord]:
+        """Record active resolution attempt reference."""
+        return self._case_repo.set_active_resolution_attempt(case_id=case_id, attempt_id=attempt_id)
+
     def list_all_cases(self) -> List[CivicCaseRecord]:
         """Enumerate all persisted cases across storage backend."""
         return self._case_repo.list_all_cases()

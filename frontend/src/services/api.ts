@@ -6,6 +6,8 @@
 import {
   AuditEvent,
   CaseHistoryItem,
+  CitizenResolutionAcceptRequest,
+  CitizenResolutionRejectRequest,
   CivicCaseCreateRequest,
   CivicCaseRecord,
   CivicEvidenceType,
@@ -266,6 +268,62 @@ export const casesApi = {
       throw new ApiError('Failed to fetch case history.', 0);
     }
   },
+
+  /**
+   * Citizen accepts resolution and closes case directly to RESOLVED.
+   * Protected by Cedar (Action: accept_resolution).
+   *
+   * SECURITY: Identity is resolved exclusively from the authenticated server-side
+   * session cookie. No simulation headers are sent. Do not add role/principal
+   * parameters to this method — citizen-only closure must never accept client identity.
+   */
+  async acceptResolution(
+    caseId: string,
+    payload: CitizenResolutionAcceptRequest = {}
+  ): Promise<CivicCaseRecord> {
+    try {
+      const res = await fetch(`${BASE_URL}/api/cases/${encodeURIComponent(caseId)}/resolution/accept`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      return await handleResponse<CivicCaseRecord>(res);
+    } catch (err: unknown) {
+      if (err instanceof ApiError) throw err;
+      throw new ApiError('Resolution acceptance failed.', 0);
+    }
+  },
+
+  /**
+   * Citizen rejects resolution with mandatory reason, returning docket for rework.
+   * Protected by Cedar (Action: reject_resolution).
+   *
+   * SECURITY: Identity is resolved exclusively from the authenticated server-side
+   * session cookie. No simulation headers are sent. Do not add role/principal
+   * parameters to this method — citizen-only closure must never accept client identity.
+   */
+  async rejectResolution(
+    caseId: string,
+    payload: CitizenResolutionRejectRequest
+  ): Promise<CivicCaseRecord> {
+    try {
+      const res = await fetch(`${BASE_URL}/api/cases/${encodeURIComponent(caseId)}/resolution/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      return await handleResponse<CivicCaseRecord>(res);
+    } catch (err: unknown) {
+      if (err instanceof ApiError) throw err;
+      throw new ApiError('Resolution rejection failed.', 0);
+    }
+  },
 };
 
 export const auditApi = {
@@ -487,5 +545,7 @@ export const api = {
   authLogin: authApi.login,
   authMe: authApi.me,
   authLogout: authApi.logout,
+  acceptResolution: casesApi.acceptResolution,
+  rejectResolution: casesApi.rejectResolution,
 };
 

@@ -67,6 +67,35 @@ class CaseRepository(ABC):
         pass
 
     @abstractmethod
+    def confirm_and_resolve_case(
+        self,
+        case_id: str,
+        feedback: Optional[str] = None,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        """Atomically confirm citizen resolution and transition case to RESOLVED."""
+        pass
+
+    @abstractmethod
+    def reject_resolution(
+        self,
+        case_id: str,
+        reason: str,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        """Record citizen resolution rejection, append note, and keep in UNDER_REVIEW."""
+        pass
+
+    @abstractmethod
+    def set_active_resolution_attempt(
+        self,
+        case_id: str,
+        attempt_id: str,
+    ) -> Optional[CivicCaseRecord]:
+        """Set or update the active resolution attempt identifier."""
+        pass
+
+    @abstractmethod
     def get_case_history(self, case_id: str) -> List[CaseHistoryItem]:
         """Retrieve sanitized lifecycle history for the case."""
         pass

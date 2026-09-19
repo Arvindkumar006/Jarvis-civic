@@ -10,12 +10,18 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 
 from app.config.settings import settings
 from app.models.enums import CaseStatus, validate_status_transition
-from app.models.evidence import EvidenceResponse, EvidenceType
+from app.models.evidence import (
+    DeterministicValidationStatus,
+    EvidenceResponse,
+    EvidenceType,
+)
 from app.models.security import (
     ApplicationPrincipal,
     ApplicationRole,
     AuthorizedCaseHistoryItem,
     CaseHistoryItem,
+    CitizenResolutionAcceptRequest,
+    CitizenResolutionRejectRequest,
     CivicAction,
     CivicCaseCreateRequest,
     CivicCaseRecord,
@@ -30,6 +36,7 @@ from app.security.audit import audit_dispatcher
 from app.security.pep import pep
 from app.security.principals import get_current_principal
 from app.services.case_store import case_store
+from app.services.evidence.repository import evidence_repo
 from app.services.evidence_verification_service import evidence_verification_service
 from app.services.notifications import notification_service
 from app.services.notifications.worker_dispatcher import worker_dispatcher
@@ -202,6 +209,13 @@ def update_case_status(
         is_public=case.is_public,
     )
 
+    # Closure Gate Restriction: Direct transition to RESOLVED is strictly prohibited for authority status updates.
+    if payload.status == CaseStatus.RESOLVED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Direct transition to RESOLVED is restricted: case closure is gated on authenticated citizen resolution confirmation.",
+        )
+
     # 3. Validate lifecycle state machine transition (Single-step forward only)
     validate_status_transition(case.status, payload.status)
 
@@ -252,6 +266,222 @@ def update_case_status(
         import logging
         logging.getLogger("jarvis.api.cases").error(
             "OpenSearch update exception on case status update %s: %s", case_id, os_err
+        )
+
+    return updated or case
+
+
+@router.post("/{case_id}/resolution/accept", response_model=CivicCaseRecord)
+def accept_resolution(
+    case_id: str,
+    payload: CitizenResolutionAcceptRequest = CitizenResolutionAcceptRequest(),
+    principal: ApplicationPrincipal = Depends(get_current_principal),
+) -> CivicCaseRecord:
+    """Accept case resolution and trigger final case closure (Protected by Cedar: accept_resolution).
+
+    Permitted strictly for the authenticated citizen case owner.
+    Denied for administrators, authorities, supervisors, and public users.
+    """
+    case = case_store.get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+
+    # 1. Enforce Cedar authorization FIRST (fail-closed)
+    pep.enforce(
+        principal=principal,
+        action=CivicAction.ACCEPT_RESOLUTION,
+        resource_id=case.case_id,
+        resource_type="CivicCase",
+        resource_owner=case.owner_id,
+        resource_department=case.department,
+        resource_status=case.status.value,
+        is_public=case.is_public,
+    )
+
+    # 2. Idempotency safeguard: if case is already RESOLVED and confirmed, return existing record
+    if case.status == CaseStatus.RESOLVED and case.resolution_confirmed:
+        return case
+
+    # 3. Pre-condition: Case must have verified resolution evidence with valid deterministic validation
+    evidence_records = evidence_repo.list_evidence_for_case(case_id)
+    valid_resolution_ev = [
+        e for e in evidence_records
+        if e.evidence_type == EvidenceType.RESOLUTION_EVIDENCE
+        and e.validation_status == DeterministicValidationStatus.VALID
+    ]
+    if not valid_resolution_ev:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot accept resolution: docket lacks verified resolution evidence with valid deterministic validation.",
+        )
+
+    # 4. Pre-condition: Case must be in UNDER_REVIEW status
+    if case.status != CaseStatus.UNDER_REVIEW:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot accept resolution: case must be in 'UNDER_REVIEW' status, currently '{case.status.value}'.",
+        )
+
+    # 5. Persist citizen confirmation and transition directly to RESOLVED
+    prev_status = case.status.value
+    updated = case_store.confirm_and_resolve_case(
+        case_id=case_id,
+        feedback=payload.feedback,
+        actor_label=principal.role.value,
+    )
+
+    # 6. Record append-only workflow audit events
+    try:
+        audit_dispatcher.record_workflow_event(
+            case_id=case_id,
+            event_type="RESOLUTION_ACCEPTED",
+            previous_status=prev_status,
+            new_status=CaseStatus.RESOLVED.value,
+            principal=principal,
+            outcome="SUCCESS",
+            metadata={
+                "feedback": payload.feedback,
+                "active_attempt": case.active_resolution_attempt,
+                "evidence_count": len(valid_resolution_ev),
+            },
+        )
+        audit_dispatcher.record_workflow_event(
+            case_id=case_id,
+            event_type="STATUS_TRANSITION",
+            previous_status=prev_status,
+            new_status=CaseStatus.RESOLVED.value,
+            principal=principal,
+            outcome="SUCCESS",
+            metadata={"note": "Citizen confirmed resolution; docket transitioned to RESOLVED"},
+        )
+    except Exception as audit_err:
+        import logging
+        logging.getLogger("jarvis.api.cases").critical(
+            "Audit event recording failed after resolution acceptance on case %s: %s", case_id, audit_err
+        )
+
+    # 7. Update OpenSearch docket index
+    try:
+        opensearch_service.update_docket(updated or case)
+    except Exception as os_err:
+        import logging
+        logging.getLogger("jarvis.api.cases").error(
+            "OpenSearch update exception on resolution accept %s: %s", case_id, os_err
+        )
+
+    # 8. Dispatch notifications (Citizen receipt + Authority alert)
+    try:
+        worker_dispatcher.dispatch_resolution_confirmed(
+            case=updated or case,
+            feedback=payload.feedback,
+        )
+    except Exception as notif_err:
+        import logging
+        logging.getLogger("jarvis.api.cases").critical(
+            "Notification dispatch exception on resolution accept %s: %s", case_id, notif_err
+        )
+
+    return updated or case
+
+
+@router.post("/{case_id}/resolution/reject", response_model=CivicCaseRecord)
+def reject_resolution(
+    case_id: str,
+    payload: CitizenResolutionRejectRequest,
+    principal: ApplicationPrincipal = Depends(get_current_principal),
+) -> CivicCaseRecord:
+    """Reject case resolution and return to authority for corrective rework (Protected by Cedar: reject_resolution).
+
+    Permitted strictly for the authenticated citizen case owner.
+    Denied for administrators, authorities, supervisors, and public users.
+    Requires substantive explanation of why resolution is rejected (reason >= 5 chars).
+    """
+    case = case_store.get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+
+    # 1. Enforce Cedar authorization FIRST (fail-closed)
+    pep.enforce(
+        principal=principal,
+        action=CivicAction.REJECT_RESOLUTION,
+        resource_id=case.case_id,
+        resource_type="CivicCase",
+        resource_owner=case.owner_id,
+        resource_department=case.department,
+        resource_status=case.status.value,
+        is_public=case.is_public,
+    )
+
+    # 2. Cannot reject an already resolved docket
+    if case.status == CaseStatus.RESOLVED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot reject resolution on an already resolved case.",
+        )
+
+    # 3. Pre-condition: Must have resolution evidence submitted
+    evidence_records = evidence_repo.list_evidence_for_case(case_id)
+    resolution_ev = [e for e in evidence_records if e.evidence_type == EvidenceType.RESOLUTION_EVIDENCE]
+    if not resolution_ev:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot reject resolution: no resolution evidence has been submitted for this docket.",
+        )
+
+    # 4. Pre-condition: Case must be in UNDER_REVIEW
+    if case.status != CaseStatus.UNDER_REVIEW:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot reject resolution: case must be in 'UNDER_REVIEW' status, currently '{case.status.value}'.",
+        )
+
+    # 5. Persist rejection, increment rejection_count, store feedback, append notes
+    updated = case_store.reject_resolution(
+        case_id=case_id,
+        reason=payload.reason,
+        actor_label=principal.role.value,
+    )
+
+    # 6. Record append-only workflow audit event
+    try:
+        audit_dispatcher.record_workflow_event(
+            case_id=case_id,
+            event_type="RESOLUTION_REJECTED",
+            previous_status=case.status.value,
+            new_status=case.status.value,
+            principal=principal,
+            outcome="SUCCESS",
+            metadata={
+                "reason": payload.reason,
+                "rejection_count": updated.rejection_count if updated else case.rejection_count + 1,
+                "active_attempt": case.active_resolution_attempt,
+            },
+        )
+    except Exception as audit_err:
+        import logging
+        logging.getLogger("jarvis.api.cases").critical(
+            "Audit event recording failed after resolution rejection on case %s: %s", case_id, audit_err
+        )
+
+    # 7. Update OpenSearch docket index
+    try:
+        opensearch_service.update_docket(updated or case)
+    except Exception as os_err:
+        import logging
+        logging.getLogger("jarvis.api.cases").error(
+            "OpenSearch update exception on resolution reject %s: %s", case_id, os_err
+        )
+
+    # 8. Dispatch notification to responsible authority alerting them of rework requirement
+    try:
+        worker_dispatcher.dispatch_resolution_rejected(
+            case=updated or case,
+            reason=payload.reason,
+        )
+    except Exception as notif_err:
+        import logging
+        logging.getLogger("jarvis.api.cases").critical(
+            "Notification dispatch exception on resolution reject %s: %s", case_id, notif_err
         )
 
     return updated or case

@@ -306,6 +306,200 @@ JARVIS Civic Decision Support
 """
         return subject, text_body, html_body
 
+    def render_resolution_confirmed_citizen(
+        self,
+        case: CivicCaseRecord,
+        recipient_name: str,
+        feedback: Optional[str] = None,
+        tracking_url: Optional[str] = None,
+    ) -> Tuple[str, str, str]:
+        """Render resolution confirmation receipt for the citizen."""
+        subject = f"[JARVIS Civic] Resolution Confirmed: {case.case_id} (Resolved & Closed)"
+
+        feedback_sec = f"\nYour Feedback: {feedback}" if feedback else ""
+
+        text_body = f"""Dear {recipient_name},
+
+You have successfully reviewed and confirmed the resolution of civic docket {case.case_id}.
+The docket has now transitioned to RESOLVED and is closed in the civic decision-support system.{feedback_sec}
+
+{f"View final docket: {tracking_url}" if tracking_url else ""}
+
+{DISCLAIMER_TEXT}
+
+JARVIS Civic Decision Support
+"""
+
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; background: #f8fafc; padding: 24px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 32px;">
+    <div style="border-bottom: 2px solid #10b981; padding-bottom: 12px; margin-bottom: 24px;">
+      <h2 style="color: #065f46; margin: 0; font-size: 20px;">Resolution Confirmed — Docket Closed</h2>
+      <p style="color: #64748b; margin: 4px 0 0 0; font-size: 13px;">Docket {escape(case.case_id)}</p>
+    </div>
+
+    <p>Dear <strong>{escape(recipient_name)}</strong>,</p>
+    <p>You have confirmed the resolution of civic docket <strong>{escape(case.case_id)}</strong>. The case has successfully transitioned to <strong>RESOLVED</strong>.</p>
+
+    {f'<div style="background: #f0fdf4; border-left: 4px solid #10b981; padding: 12px; margin: 16px 0;"><p style="margin: 0; font-size: 13px; color: #166534;"><strong>Your Feedback:</strong> {escape(feedback)}</p></div>' if feedback else ''}
+
+    {f'<p><a href="{escape(tracking_url)}" style="display: inline-block; background: #059669; color: #ffffff; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 13px;">View Final Docket</a></p>' if tracking_url else ''}
+
+    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 32px 0 16px 0;">
+    <p style="font-size: 11px; color: #94a3b8; line-height: 1.5; margin: 0;">
+      <strong>DISCLAIMER:</strong> {escape(DISCLAIMER_TEXT)}
+    </p>
+  </div>
+</body>
+</html>
+"""
+        return subject, text_body, html_body
+
+    def render_resolution_confirmed_authority(
+        self,
+        case: CivicCaseRecord,
+        recipient_name: str,
+        feedback: Optional[str] = None,
+    ) -> Tuple[str, str, str]:
+        """Render resolution confirmation alert for the department authority."""
+        subject = f"[JARVIS Civic — Closed] Citizen Confirmed Resolution: {case.case_id}"
+
+        feedback_sec = f"\nCitizen Feedback: {feedback}" if feedback else ""
+
+        text_body = f"""Attention: {recipient_name},
+
+The citizen owner of civic docket {case.case_id} ({case.department}) has reviewed and confirmed the resolution.
+The case lifecycle has reached final state: RESOLVED.{feedback_sec}
+
+{DISCLAIMER_TEXT}
+
+JARVIS Civic Decision Support
+"""
+
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; background: #f8fafc; padding: 24px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 32px;">
+    <div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 24px;">
+      <h2 style="color: #065f46; margin: 0; font-size: 20px;">Citizen Confirmed Resolution</h2>
+      <p style="color: #64748b; margin: 4px 0 0 0; font-size: 13px;">Department: {escape(case.department)}</p>
+    </div>
+
+    <p>Dear <strong>{escape(recipient_name)}</strong>,</p>
+    <p>Citizen confirmation received for docket <strong>{escape(case.case_id)}</strong>. The docket is formally <strong>RESOLVED</strong>.</p>
+
+    {f'<p style="background: #f0fdf4; border-left: 4px solid #059669; padding: 12px; font-size: 13px; color: #065f46;"><strong>Citizen Feedback:</strong> {escape(feedback)}</p>' if feedback else ''}
+
+    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 32px 0 16px 0;">
+    <p style="font-size: 11px; color: #94a3b8; line-height: 1.5; margin: 0;">
+      <strong>DISCLAIMER:</strong> {escape(DISCLAIMER_TEXT)}
+    </p>
+  </div>
+</body>
+</html>
+"""
+        return subject, text_body, html_body
+
+    def render_resolution_rejected_authority(
+        self,
+        case: CivicCaseRecord,
+        recipient_name: str,
+        reason: str,
+    ) -> Tuple[str, str, str]:
+        """Render notification to authority when citizen rejects proposed resolution."""
+        subject = f"[JARVIS Civic — Action Required] Citizen Rejected Resolution: {case.case_id}"
+
+        text_body = f"""Attention: {recipient_name},
+
+The citizen owner of civic docket {case.case_id} has REJECTED the proposed resolution.
+The docket remains in UNDER_REVIEW and requires corrective action or additional inspection.
+
+CITIZEN REJECTION REASON:
+{reason}
+
+Please inspect the docket in your Authority Workspace to perform corrective actions and submit updated resolution evidence.
+
+{DISCLAIMER_TEXT}
+
+JARVIS Civic Decision Support
+"""
+
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; background: #f8fafc; padding: 24px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 32px;">
+    <div style="border-bottom: 2px solid #dc2626; padding-bottom: 12px; margin-bottom: 24px;">
+      <h2 style="color: #991b1b; margin: 0; font-size: 20px;">Resolution Rejected by Citizen — Rework Required</h2>
+      <p style="color: #64748b; margin: 4px 0 0 0; font-size: 13px;">Docket {escape(case.case_id)} // {escape(case.department)}</p>
+    </div>
+
+    <p>Dear <strong>{escape(recipient_name)}</strong>,</p>
+    <p>The citizen has reviewed the submitted resolution for docket <strong>{escape(case.case_id)}</strong> and indicated that the defect remains unresolved.</p>
+
+    <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin: 16px 0; border-radius: 4px;">
+      <p style="margin: 0 0 4px 0; font-size: 12px; color: #991b1b; font-weight: 700;">CITIZEN'S STATED REASON:</p>
+      <p style="margin: 0; font-size: 14px; color: #7f1d1d;">{escape(reason)}</p>
+    </div>
+
+    <p style="font-size: 13px; color: #475569;">The case remains in <strong>UNDER_REVIEW</strong>. Please perform corrective work and submit revised resolution evidence.</p>
+
+    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 32px 0 16px 0;">
+    <p style="font-size: 11px; color: #94a3b8; line-height: 1.5; margin: 0;">
+      <strong>DISCLAIMER:</strong> {escape(DISCLAIMER_TEXT)}
+    </p>
+  </div>
+</body>
+</html>
+"""
+        return subject, text_body, html_body
+
+    def render_resolution_rejected_citizen(
+        self,
+        case: CivicCaseRecord,
+        recipient_name: str,
+        reason: str,
+    ) -> Tuple[str, str, str]:
+        """Render notification acknowledging citizen's resolution rejection."""
+        subject = f"[JARVIS Civic] Resolution Rejection Logged: {case.case_id}"
+
+        text_body = f"""Dear {recipient_name},
+
+Your feedback has been recorded. You have rejected the proposed resolution for civic docket {case.case_id}.
+The case remains in UNDER_REVIEW and the responsible municipal department has been notified to carry out further rework.
+
+REASON RECORDED:
+{reason}
+
+{DISCLAIMER_TEXT}
+
+JARVIS Civic Decision Support
+"""
+
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; background: #f8fafc; padding: 24px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 32px;">
+    <h3 style="color: #b91c1c; margin-top: 0;">Resolution Rejection Recorded</h3>
+    <p>Dear <strong>{escape(recipient_name)}</strong>,</p>
+    <p>Your objection to the resolution of docket <strong>{escape(case.case_id)}</strong> has been logged. The case remains in <strong>UNDER_REVIEW</strong>.</p>
+    <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px; margin: 12px 0;">
+      <p style="margin: 0; font-size: 13px; color: #7f1d1d;"><strong>Reason:</strong> {escape(reason)}</p>
+    </div>
+    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0 12px 0;">
+    <p style="font-size: 11px; color: #94a3b8; line-height: 1.5; margin: 0;">
+      <strong>DISCLAIMER:</strong> {escape(DISCLAIMER_TEXT)}
+    </p>
+  </div>
+</body>
+</html>
+"""
+        return subject, text_body, html_body
+
 
 # Global singleton instance
 email_template_service = EmailTemplateService()

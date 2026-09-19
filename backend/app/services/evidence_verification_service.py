@@ -191,6 +191,10 @@ class EvidenceVerificationService:
         # Server derives uploader metadata from AuthenticatedPrincipal
         submitting_officer = principal.principal_id if evidence_type == EvidenceType.RESOLUTION_EVIDENCE else None
         officer_dept = principal.department if evidence_type == EvidenceType.RESOLUTION_EVIDENCE else None
+        attempt_ref = resolution_attempt or f"attempt-{case.rejection_count + 1}" if evidence_type == EvidenceType.RESOLUTION_EVIDENCE else None
+
+        if evidence_type == EvidenceType.RESOLUTION_EVIDENCE and attempt_ref:
+            case_store.set_active_resolution_attempt(case_id, attempt_ref)
 
         rec = EvidenceRecord(
             evidence_id=evidence_id,
@@ -209,7 +213,7 @@ class EvidenceVerificationService:
             verification_reason=verification_reason,
             ai_assessment=assessment.reason if assessment.ai_available else None,
             ai_confidence=assessment.confidence,
-            resolution_attempt=resolution_attempt,
+            resolution_attempt=attempt_ref,
             submitting_authority_principal=submitting_officer,
             authority_department=officer_dept,
             created_at=now,

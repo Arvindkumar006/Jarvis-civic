@@ -90,4 +90,14 @@ namespace JarvisCivic {
         principal: [AuthorityOfficer, MunicipalSupervisor, Administrator],
         resource: [CivicDocketSearch]
     };
+
+    action accept_resolution appliesTo {
+        principal: [Citizen],
+        resource: [CivicCase]
+    };
+
+    action reject_resolution appliesTo {
+        principal: [Citizen],
+        resource: [CivicCase]
+    };
 }
