@@ -468,5 +468,6 @@ flowchart LR
 
 ## 18. License & Attribution
 
-JARVIS Civic is licensed under the **Apache License 2.0**.  
+JARVIS Civic is licensed under the **MIT License
+**.  
 
