@@ -561,3 +561,249 @@ def test_20_restart_preserves_confirmation_state():
     assert reloaded_case.resolution_confirmed_at is not None
     assert reloaded_case.active_resolution_attempt == "attempt-1"
     assert reloaded_case.citizen_feedback == "Final confirmed resolution."
+
+
+# ---------------------------------------------------------------------------
+# TEST 21: Authority officer request confirmation success
+# ---------------------------------------------------------------------------
+def test_21_authority_officer_request_confirmation_success():
+    citizen_c = login_as("citizen@jarviscivic.local")
+    authority_c = login_as("roads.officer@jarviscivic.local")
+
+    create_res = citizen_c.post(
+        "/api/cases",
+        json={
+            "description": "Pothole on Mount Road",
+            "location": "Mount Road",
+            "department": "PWD_ROADS",
+            "is_public": True,
+        },
+    )
+    case_id = create_res.json()["case_id"]
+
+    for next_st in ["ROUTING_PREPARED", "SUBMISSION_READY", "UNDER_REVIEW"]:
+        authority_c.patch(
+            f"/api/cases/{case_id}/status",
+            json={"status": next_st, "notes": f"Advancing to {next_st}"},
+        )
+
+    # Authority uploads resolution evidence with authoritative resolution message
+    files = {"file": ("repaired.jpg", io.BytesIO(VALID_JPEG), "image/jpeg")}
+    data = {
+        "evidence_type": "RESOLUTION_EVIDENCE",
+        "resolution_message": "Pothole filled with standard asphalt mix and leveled.",
+    }
+    upload_res = authority_c.post(f"/api/cases/{case_id}/evidence", files=files, data=data)
+    assert upload_res.status_code == 201
+
+    # Authority requests citizen confirmation
+    req_res = authority_c.post(f"/api/cases/{case_id}/resolution/request-confirmation")
+    assert req_res.status_code == 200
+    data = req_res.json()
+    assert data["confirmation_requested"] is True
+    assert data["confirmation_requested_at"] is not None
+    assert data["resolution_message"] == "Pothole filled with standard asphalt mix and leveled."
+
+    # Verify audit event emitted
+    audit_events = audit_dispatcher.get_events_for_case(case_id)
+    req_events = [e for e in audit_events if e.event_type == "CITIZEN_CONFIRMATION_REQUESTED"]
+    assert len(req_events) == 1
+    assert req_events[0].outcome == "SUCCESS"
+
+
+# ---------------------------------------------------------------------------
+# TEST 22: Administrator CANNOT request citizen confirmation (Cedar DENY -> 403)
+# ---------------------------------------------------------------------------
+def test_22_administrator_request_confirmation_denied_403():
+    case_id, _, authority_c, _ = create_case_under_review_with_resolution_evidence()
+
+    # Upload authoritative resolution message via authority
+    note_res = authority_c.post(
+        f"/api/cases/{case_id}/resolution-note",
+        json={"note": "Official resolution statement"},
+    )
+    assert note_res.status_code == 200
+
+    admin_c = login_as("admin@jarviscivic.local")
+    res = admin_c.post(f"/api/cases/{case_id}/resolution/request-confirmation")
+    assert res.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# TEST 23: Different department officer CANNOT request confirmation (Cedar DENY -> 403)
+# ---------------------------------------------------------------------------
+def test_23_different_department_officer_request_confirmation_denied_403():
+    case_id, _, _, _ = create_case_under_review_with_resolution_evidence(department="PWD_ROADS")
+
+    drainage_officer_c = login_as("drainage.officer@jarviscivic.local")
+    res = drainage_officer_c.post(f"/api/cases/{case_id}/resolution/request-confirmation")
+    assert res.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# TEST 24: Citizen CANNOT request citizen confirmation (Cedar DENY -> 403)
+# ---------------------------------------------------------------------------
+def test_24_citizen_request_confirmation_denied_403():
+    case_id, citizen_c, _, _ = create_case_under_review_with_resolution_evidence()
+
+    res = citizen_c.post(f"/api/cases/{case_id}/resolution/request-confirmation")
+    assert res.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# TEST 25: Unauthenticated user CANNOT request confirmation (401)
+# ---------------------------------------------------------------------------
+def test_25_unauthenticated_request_confirmation_denied_401():
+    case_id, _, _, _ = create_case_under_review_with_resolution_evidence()
+    anon_c = TestClient(app)
+
+    res = anon_c.post(f"/api/cases/{case_id}/resolution/request-confirmation")
+    assert res.status_code in [401, 403]
+
+
+# ---------------------------------------------------------------------------
+# TEST 26: Single authoritative message cannot be overwritten on request confirmation
+# ---------------------------------------------------------------------------
+def test_26_single_authoritative_resolution_message_cannot_be_overwritten():
+    citizen_c = login_as("citizen@jarviscivic.local")
+    authority_c = login_as("roads.officer@jarviscivic.local")
+
+    create_res = citizen_c.post(
+        "/api/cases",
+        json={
+            "description": "Pothole on Mount Road",
+            "location": "Mount Road",
+            "department": "PWD_ROADS",
+            "is_public": True,
+        },
+    )
+    case_id = create_res.json()["case_id"]
+
+    for next_st in ["ROUTING_PREPARED", "SUBMISSION_READY", "UNDER_REVIEW"]:
+        authority_c.patch(
+            f"/api/cases/{case_id}/status",
+            json={"status": next_st, "notes": f"Advancing to {next_st}"},
+        )
+
+    # 1. Authority uploads resolution evidence with authoritative message
+    files = {"file": ("repair_done.jpg", io.BytesIO(VALID_JPEG), "image/jpeg")}
+    data = {
+        "evidence_type": "RESOLUTION_EVIDENCE",
+        "resolution_message": "Authoritative resolution message from evidence submission.",
+    }
+    upload_res = authority_c.post(f"/api/cases/{case_id}/evidence", files=files, data=data)
+    assert upload_res.status_code == 201
+    assert upload_res.json()["resolution_message"] == "Authoritative resolution message from evidence submission."
+
+    # 2. Request confirmation with a different message attempt in payload
+    req_res = authority_c.post(
+        f"/api/cases/{case_id}/resolution/request-confirmation",
+        json={"message": "Unauthorized replacement message attempt"},
+    )
+    assert req_res.status_code == 200
+    # Must preserve the authoritative message from evidence upload!
+    assert req_res.json()["resolution_message"] == "Authoritative resolution message from evidence submission."
+
+
+# ---------------------------------------------------------------------------
+# TEST 27: Backend confirmation gate enforces all required conditions
+# ---------------------------------------------------------------------------
+def test_27_backend_confirmation_gate_enforces_all_conditions():
+    citizen_c = login_as("citizen@jarviscivic.local")
+    authority_c = login_as("roads.officer@jarviscivic.local")
+
+    create_res = citizen_c.post(
+        "/api/cases",
+        json={
+            "description": "Road barrier broken",
+            "location": "Anna Salai",
+            "department": "PWD_ROADS",
+            "is_public": True,
+        },
+    )
+    case_id = create_res.json()["case_id"]
+
+    # Condition: case must be in UNDER_REVIEW (currently DOCKET_CREATED)
+    res_not_under_review = authority_c.post(f"/api/cases/{case_id}/resolution/request-confirmation")
+    assert res_not_under_review.status_code == 409
+    assert "under_review" in res_not_under_review.json()["detail"].lower()
+
+    # Advance to UNDER_REVIEW without uploading resolution evidence
+    for next_st in ["ROUTING_PREPARED", "SUBMISSION_READY", "UNDER_REVIEW"]:
+        authority_c.patch(
+            f"/api/cases/{case_id}/status",
+            json={"status": next_st, "notes": f"Advancing to {next_st}"},
+        )
+
+    # Condition: active resolution attempt and resolution evidence must exist
+    res_no_evidence = authority_c.post(f"/api/cases/{case_id}/resolution/request-confirmation")
+    assert res_no_evidence.status_code == 409
+
+    # Upload resolution evidence without resolution message
+    files = {"file": ("barrier_fixed.jpg", io.BytesIO(VALID_JPEG), "image/jpeg")}
+    upload_res = authority_c.post(
+        f"/api/cases/{case_id}/evidence",
+        files=files,
+        data={"evidence_type": "RESOLUTION_EVIDENCE"},
+    )
+    assert upload_res.status_code == 201
+
+    # Condition: non-empty persisted resolution message required
+    res_no_msg = authority_c.post(
+        f"/api/cases/{case_id}/resolution/request-confirmation",
+        json={"message": "   "},
+    )
+    assert res_no_msg.status_code == 409
+    assert "resolution message required" in res_no_msg.json()["detail"].lower()
+
+
+# ---------------------------------------------------------------------------
+# TEST 28: Full confirmation flow and Citizen accept resets confirmation state
+# ---------------------------------------------------------------------------
+def test_28_full_confirmation_flow_and_citizen_accept():
+    citizen_c = login_as("citizen@jarviscivic.local")
+    authority_c = login_as("roads.officer@jarviscivic.local")
+
+    create_res = citizen_c.post(
+        "/api/cases",
+        json={
+            "description": "Drain cover missing",
+            "location": "T Nagar",
+            "department": "PWD_ROADS",
+            "is_public": True,
+        },
+    )
+    case_id = create_res.json()["case_id"]
+
+    for next_st in ["ROUTING_PREPARED", "SUBMISSION_READY", "UNDER_REVIEW"]:
+        authority_c.patch(
+            f"/api/cases/{case_id}/status",
+            json={"status": next_st, "notes": f"Advancing to {next_st}"},
+        )
+
+    # Authority uploads resolution evidence + message
+    files = {"file": ("cover_replaced.jpg", io.BytesIO(VALID_JPEG), "image/jpeg")}
+    upload_res = authority_c.post(
+        f"/api/cases/{case_id}/evidence",
+        files=files,
+        data={
+            "evidence_type": "RESOLUTION_EVIDENCE",
+            "resolution_message": "Heavy duty drain cover installed and bolted.",
+        },
+    )
+    assert upload_res.status_code == 201
+
+    # Authority requests citizen confirmation
+    req_res = authority_c.post(f"/api/cases/{case_id}/resolution/request-confirmation")
+    assert req_res.status_code == 200
+    assert req_res.json()["confirmation_requested"] is True
+
+    # Citizen accepts resolution
+    acc_res = citizen_c.post(
+        f"/api/cases/{case_id}/resolution/accept",
+        json={"feedback": "Verified in person, safe for pedestrians."},
+    )
+    assert acc_res.status_code == 200
+    assert acc_res.json()["status"] == "RESOLVED"
+    assert acc_res.json()["resolution_confirmed"] is True
+    assert acc_res.json()["confirmation_requested"] is False

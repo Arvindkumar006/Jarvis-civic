@@ -56,10 +56,23 @@ class CivicExtraction(BaseModel):
         default=None,
         description="6-digit Indian postal code if explicitly stated",
     )
+    street: Optional[str] = Field(
+        default=None,
+        description="Explicit street or road name in citizen's original language",
+    )
+    area: Optional[str] = Field(
+        default=None,
+        description="Neighborhood, sector, ward, or sub-area in original language",
+    )
+    locality: Optional[str] = Field(
+        default=None,
+        description="City, town, or primary administrative locality in original language",
+    )
     hazard_flags: List[str] = Field(
         default_factory=list,
         description="Factual safety hazard indicators explicitly reported by citizen",
     )
+
 
 
 class ClassificationResult(BaseModel):

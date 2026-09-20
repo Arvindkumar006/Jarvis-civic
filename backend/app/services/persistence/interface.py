@@ -91,8 +91,18 @@ class CaseRepository(ABC):
         self,
         case_id: str,
         attempt_id: str,
+        resolution_message: Optional[str] = None,
     ) -> Optional[CivicCaseRecord]:
-        """Set or update the active resolution attempt identifier."""
+        """Set or update the active resolution attempt identifier and optional authoritative message."""
+        pass
+
+    @abstractmethod
+    def request_citizen_confirmation(
+        self,
+        case_id: str,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        """Record authority request for citizen resolution confirmation."""
         pass
 
     @abstractmethod

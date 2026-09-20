@@ -8,14 +8,16 @@ import {
   Globe,
   Compass,
 } from 'lucide-react';
-import { CanonicalCivicState, UrgencyLevel } from '../../types/civic';
+import { CanonicalCivicState, UrgencyLevel, CivicCaseRecord, CaseStatus } from '../../types/civic';
 import './ExtractionHUD.css';
 
-interface ExtractionHUDProps {
+export interface ExtractionHUDProps {
   state: CanonicalCivicState | null;
   isLoading?: boolean;
   onOpenDocketModal?: () => void;
   onOpenDocketReview?: () => void;
+  createdCase?: CivicCaseRecord | null;
+  onTrackDocket?: (caseId: string) => void;
 }
 
 const DEPARTMENT_LABELS: Record<string, string> = {
@@ -33,8 +35,16 @@ export const ExtractionHUD: React.FC<ExtractionHUDProps> = ({
   isLoading = false,
   onOpenDocketModal,
   onOpenDocketReview,
+  createdCase,
+  onTrackDocket,
 }) => {
   const triggerReview = onOpenDocketReview || onOpenDocketModal;
+  const hasCaseCreated = Boolean(createdCase && createdCase.case_id);
+  const isResolved =
+    createdCase?.status === CaseStatus.RESOLVED || (createdCase?.status as string) === 'RESOLVED';
+  const authoritativeStatus = createdCase?.status
+    ? createdCase.status.replace(/_/g, ' ')
+    : 'DOCKET CREATED';
   const hasIntent = Boolean(state?.intent);
   const hasLocation = Boolean(state?.location);
   const hasDept = Boolean(state?.department);
@@ -71,9 +81,29 @@ export const ExtractionHUD: React.FC<ExtractionHUDProps> = ({
         <div className="signal-subhead-row">
           <span className="technical-label">AI CIVIC REASONING HUD</span>
         </div>
-        <div className={`signal-system-state ${isReady ? 'state-ready' : 'state-active'}`}>
+        <div
+          className={`signal-system-state ${
+            hasCaseCreated
+              ? 'state-ready'
+              : isReady
+              ? 'state-ready'
+              : 'state-active'
+          }`}
+        >
           <span className="state-bullet" />
-          <span>{isReady ? 'CIVIC SIGNAL VALIDATED' : isLoading ? 'ANALYZING CIVIC SIGNAL' : hasIntent ? 'ANALYZING CIVIC SIGNAL' : 'WAITING FOR CIVIC SIGNAL — Listening for problem statement'}</span>
+          <span>
+            {hasCaseCreated
+              ? isResolved
+                ? 'CIVIC ACTION DOCKET RESOLVED'
+                : 'CIVIC ACTION DOCKET CREATED'
+              : isReady
+              ? 'CIVIC SIGNAL VALIDATED'
+              : isLoading
+              ? 'ANALYZING CIVIC SIGNAL'
+              : hasIntent
+              ? 'ANALYZING CIVIC SIGNAL'
+              : 'WAITING FOR CIVIC SIGNAL — Listening for problem statement'}
+          </span>
         </div>
       </div>
 
@@ -119,7 +149,7 @@ export const ExtractionHUD: React.FC<ExtractionHUDProps> = ({
               )}
               <span className="signal-field-label">LOCATION</span>
             </div>
-            <span className="signal-field-code">TEXTUAL_REF</span>
+            <span className="signal-field-code">CIVIC_STATE</span>
           </div>
           <div className="signal-value-block">
             <div className="signal-location-row">
@@ -128,14 +158,40 @@ export const ExtractionHUD: React.FC<ExtractionHUDProps> = ({
                 {state?.location || (isLoading ? 'Detecting location...' : 'Awaiting location reference')}
               </span>
             </div>
-            {state?.landmark && (
-              <div className="signal-landmark-tag">
-                <span>Landmark:</span> <strong>{state.landmark}</strong>
-              </div>
-            )}
-            {state?.pincode && (
-              <div className="signal-pincode-tag">
-                <span>PIN:</span> <strong>{state.pincode}</strong>
+
+            {/* Structured Multilingual Hierarchy: Street, Area, Locality, Landmark, Pincode */}
+            {(state?.street || state?.area || state?.locality || state?.landmark || state?.pincode) && (
+              <div className="signal-location-breakdown" aria-label="Structured Location Hierarchy">
+                {state.street && (
+                  <div className="breakdown-row">
+                    <span className="breakdown-key">Street:</span>
+                    <span className="breakdown-val">{state.street}</span>
+                  </div>
+                )}
+                {state.area && (
+                  <div className="breakdown-row">
+                    <span className="breakdown-key">Area:</span>
+                    <span className="breakdown-val">{state.area}</span>
+                  </div>
+                )}
+                {state.locality && (
+                  <div className="breakdown-row">
+                    <span className="breakdown-key">Locality:</span>
+                    <span className="breakdown-val">{state.locality}</span>
+                  </div>
+                )}
+                {state.landmark && (
+                  <div className="breakdown-row">
+                    <span className="breakdown-key">Landmark:</span>
+                    <span className="breakdown-val">{state.landmark}</span>
+                  </div>
+                )}
+                {state.pincode && (
+                  <div className="breakdown-row">
+                    <span className="breakdown-key">Pincode:</span>
+                    <span className="breakdown-val">{state.pincode}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -224,8 +280,52 @@ export const ExtractionHUD: React.FC<ExtractionHUDProps> = ({
           </div>
         )}
 
-        {/* Ready For Action Transformation Section */}
-        {isReady && (
+        {/* Ready For Action Transformation Section / Post-Creation Docket Banner */}
+        {hasCaseCreated && createdCase ? (
+          <div
+            className={`signal-created-banner animate-fade-in ${isResolved ? 'resolved-state' : ''}`}
+            role="status"
+          >
+            <div className="ready-divider-line" />
+            <div className="ready-status-row">
+              <CheckCircle2 size={16} color="var(--civic-emerald)" />
+              <span className="ready-title">
+                {isResolved ? 'CIVIC ACTION DOCKET RESOLVED' : 'CIVIC ACTION DOCKET CREATED'}
+              </span>
+            </div>
+
+            <div className="created-docket-meta-block">
+              <div className="created-meta-row">
+                <span className="meta-label">CASE ID:</span>
+                <span className="meta-case-id">{createdCase.case_id}</span>
+              </div>
+              <div className="created-meta-row">
+                <span className="meta-label">STATUS:</span>
+                <span
+                  className="meta-status-val"
+                  style={{ color: isResolved ? 'var(--civic-emerald)' : 'var(--civic-amber)' }}
+                >
+                  {authoritativeStatus}
+                </span>
+              </div>
+            </div>
+
+            {onTrackDocket && (
+              <button
+                type="button"
+                className="btn-track-civic-docket illuminated"
+                onClick={() => onTrackDocket(createdCase.case_id)}
+                aria-label="Track Docket"
+              >
+                <span>TRACK DOCKET →</span>
+              </button>
+            )}
+
+            <p className="ready-disclaimer-text">
+              This record is generated by JARVIS Civic and is not proof of official government submission or resolution.
+            </p>
+          </div>
+        ) : isReady ? (
           <div className="signal-ready-banner animate-fade-in" role="status">
             <div className="ready-divider-line" />
             <div className="ready-status-row">
@@ -258,7 +358,7 @@ export const ExtractionHUD: React.FC<ExtractionHUDProps> = ({
               This record is generated by JARVIS Civic and is not proof of official government submission or resolution.
             </p>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Footer Meta */}

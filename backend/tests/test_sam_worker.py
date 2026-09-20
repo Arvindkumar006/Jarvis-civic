@@ -440,7 +440,7 @@ def test_sam_worker_packaging_parity_with_authoritative_backend():
     assert os.path.exists(src), f"backend/app not found at {src}"
     assert os.path.exists(dst), f"sam packaging mirror not found at {dst}"
 
-    cmp = filecmp.dircmp(src, dst, ignore=["__pycache__", ".pytest_cache"])
+    cmp = filecmp.dircmp(src, dst, ignore=["__pycache__", ".pytest_cache", "cases_store.json"])
     def assert_no_diff(dcmp):
         assert not dcmp.diff_files, f"Divergent files between backend and SAM worker packaging: {dcmp.diff_files} in {dcmp.left}"
         assert not dcmp.left_only, f"Backend files missing from SAM worker packaging: {dcmp.left_only} in {dcmp.left}"

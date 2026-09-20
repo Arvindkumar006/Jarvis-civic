@@ -23,6 +23,7 @@ async def process_civic_message(
     session_id: str,
     language: Optional[str] = "en",
     current_case_id: Optional[str] = None,
+    previous_state: Optional[CanonicalCivicState] = None,
 ) -> CanonicalCivicState:
     """Entry point for processing a citizen conversation turn.
 
@@ -42,5 +43,7 @@ async def process_civic_message(
         session_id=session_id,
         language_hint=language or "English",
         current_case_id=current_case_id,
+        client_prev_state=previous_state,
     )
     return state
+

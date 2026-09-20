@@ -139,7 +139,42 @@ export const conversationApi = {
       );
     }
   },
+
+  /**
+   * Submit citizen image + query for Vision AI relevance assessment.
+   * Advisory only — result NEVER changes lifecycle or deletes evidence.
+   * Gracefully returns UNCERTAIN if Vision AI is unavailable.
+   */
+  async submitEvidenceRelevance(
+    query: string,
+    imageFile: File
+  ): Promise<import('../types/civic').EvidenceRelevanceAssessment> {
+    const form = new FormData();
+    form.append('query', query);
+    form.append('image', imageFile, imageFile.name);
+
+    try {
+      const res = await fetch(`${BASE_URL}/api/conversation/evidence/relevance`, {
+        method: 'POST',
+        credentials: 'include',
+        body: form,
+      });
+      return await handleResponse<import('../types/civic').EvidenceRelevanceAssessment>(res);
+    } catch (err: unknown) {
+      if (err instanceof ApiError) throw err;
+      // Graceful degradation: return UNCERTAIN so UI stays functional
+      return {
+        relevance: 'UNCERTAIN' as import('../types/civic').EvidenceRelevanceOutcome,
+        reason: 'Vision AI service offline or unavailable.',
+        detected_features: [],
+        confidence: null,
+        model_id: null,
+        ai_available: false,
+      };
+    }
+  },
 };
+
 
 export const casesApi = {
   /**
@@ -324,6 +359,51 @@ export const casesApi = {
       throw new ApiError('Resolution rejection failed.', 0);
     }
   },
+
+  /**
+   * Authority requests citizen confirmation on submitted resolution evidence.
+   * Protected by Cedar (Action: request_citizen_confirmation).
+   */
+  async requestCitizenConfirmation(
+    caseId: string,
+    payloadOrRole?: { resolution_message?: string } | string,
+    roleOrPid?: string,
+    principalIdOrDept?: string,
+    dept?: string
+  ): Promise<CivicCaseRecord> {
+    let payload: { resolution_message?: string } = {};
+    let role: string | undefined;
+    let principalId: string | undefined;
+    let department: string | undefined;
+
+    if (typeof payloadOrRole === 'object' && payloadOrRole !== null) {
+      payload = payloadOrRole;
+      role = roleOrPid;
+      principalId = principalIdOrDept;
+      department = dept;
+    } else {
+      role = typeof payloadOrRole === 'string' ? payloadOrRole : undefined;
+      principalId = roleOrPid;
+      department = principalIdOrDept;
+    }
+
+    try {
+      const simHeaders = buildSimulatedHeaders(role, principalId, department);
+      const res = await fetch(`${BASE_URL}/api/cases/${encodeURIComponent(caseId)}/resolution/request-confirmation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...simHeaders,
+        },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      return await handleResponse<CivicCaseRecord>(res);
+    } catch (err: unknown) {
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(err instanceof Error ? err.message : 'Network error during request citizen confirmation', 0);
+    }
+  },
 };
 
 export const auditApi = {
@@ -384,7 +464,8 @@ export const evidenceApi = {
     principalId?: string,
     dept?: string,
     evidenceType: CivicEvidenceType = CivicEvidenceType.CASE_EVIDENCE,
-    resolutionAttempt?: string
+    resolutionAttempt?: string,
+    resolutionMessage?: string
   ): Promise<EvidenceResponse> {
     try {
       const formData = new FormData();
@@ -392,6 +473,9 @@ export const evidenceApi = {
       formData.append('evidence_type', evidenceType);
       if (resolutionAttempt) {
         formData.append('resolution_attempt', resolutionAttempt);
+      }
+      if (resolutionMessage) {
+        formData.append('resolution_message', resolutionMessage);
       }
 
       const simHeaders = buildSimulatedHeaders(role, principalId, dept);
@@ -547,5 +631,6 @@ export const api = {
   authLogout: authApi.logout,
   acceptResolution: casesApi.acceptResolution,
   rejectResolution: casesApi.rejectResolution,
+  requestCitizenConfirmation: casesApi.requestCitizenConfirmation,
 };
 

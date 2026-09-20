@@ -13,9 +13,17 @@ import {
   ChevronDown,
   Volume2,
   FileText,
+  Paperclip,
+  X,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
 } from 'lucide-react';
-import { ChatMessage } from '../../types/civic';
+import { ChatMessage, EvidenceRelevanceAssessment, EvidenceRelevanceOutcome, StagedImageAttachment } from '../../types/civic';
 import { SUPPORTED_LOCALES, useVoiceInput } from '../../hooks/useVoiceInput';
+import { conversationApi } from '../../services/api';
 import './ConversationStudio.css';
 
 interface ConversationStudioProps {
@@ -26,6 +34,16 @@ interface ConversationStudioProps {
   error?: string | null;
   onSendMessage: (text: string) => void;
   onSendVoiceMessage?: (transcription: string, durationStr: string, languageName: string) => void;
+  /**
+   * Called when citizen sends a message with an attached image.
+   * imageAssessment is the advisory Vision AI result (may be null if AI unavailable).
+   */
+  onSendMessageWithImage?: (
+    text: string,
+    imageFile: File,
+    imagePreviewUrl: string,
+    assessment: EvidenceRelevanceAssessment | null
+  ) => void;
   onResetConversation?: () => void;
   onClearError?: () => void;
   hasCaseCreated?: boolean;
@@ -47,6 +65,7 @@ export const ConversationStudio: React.FC<ConversationStudioProps> = ({
   error,
   onSendMessage,
   onSendVoiceMessage,
+  onSendMessageWithImage,
   onResetConversation,
   onClearError,
   hasCaseCreated = false,
@@ -59,8 +78,14 @@ export const ConversationStudio: React.FC<ConversationStudioProps> = ({
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
 
+  /** Staged image: file + preview URL (revoked on remove/send) */
+  const [stagedImage, setStagedImage] = useState<StagedImageAttachment | null>(null);
+  /** Whether Vision AI call is in progress */
+  const [isAssessingImage, setIsAssessingImage] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Integrated Voice Input hook
   const {
@@ -104,13 +129,30 @@ export const ConversationStudio: React.FC<ConversationStudioProps> = ({
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const handleSendText = () => {
-    if (inputText.trim() && !loading) {
-      onSendMessage(inputText.trim());
-      setInputText('');
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
+  const handleSendText = async () => {
+    if (!inputText.trim() || loading) return;
+    const text = inputText.trim();
+    setInputText('');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+
+    if (stagedImage && onSendMessageWithImage) {
+      // Fire Vision AI assessment asynchronously before dispatching message
+      setIsAssessingImage(true);
+      let assessment: EvidenceRelevanceAssessment | null = null;
+      try {
+        assessment = await conversationApi.submitEvidenceRelevance(text, stagedImage.file);
+      } catch {
+        // Always degrade gracefully — never block the message
+        assessment = null;
+      } finally {
+        setIsAssessingImage(false);
       }
+      onSendMessageWithImage(text, stagedImage.file, stagedImage.previewUrl, assessment);
+      // Revoke preview URL and clear staged image
+      URL.revokeObjectURL(stagedImage.previewUrl);
+      setStagedImage(null);
+    } else {
+      onSendMessage(text);
     }
   };
 
@@ -142,7 +184,7 @@ export const ConversationStudio: React.FC<ConversationStudioProps> = ({
   // Stop voice recording and dispatch voice message
   const handleStopAndSendVoice = () => {
     stopListening();
-    const durationStr = formatDuration(recordingSeconds || 6);
+    const durationStr = formatDuration(recordingSeconds > 0 ? recordingSeconds : 4);
     const finalTranscript = transcript.trim();
 
     if (finalTranscript) {
@@ -168,6 +210,32 @@ export const ConversationStudio: React.FC<ConversationStudioProps> = ({
   const togglePlayVoice = (msgId: string) => {
     setPlayingVoiceId((prev) => (prev === msgId ? null : msgId));
   };
+
+  /** Handle image file selection from hidden input */
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Revoke old preview if one existed
+    if (stagedImage) URL.revokeObjectURL(stagedImage.previewUrl);
+    const previewUrl = URL.createObjectURL(file);
+    setStagedImage({ file, previewUrl });
+    // Reset file input so re-selecting the same file triggers onChange
+    e.target.value = '';
+  };
+
+  /** Remove staged image and revoke its object URL */
+  const handleRemoveImage = () => {
+    if (stagedImage) URL.revokeObjectURL(stagedImage.previewUrl);
+    setStagedImage(null);
+  };
+
+  // Cleanup object URL on unmount
+  useEffect(() => {
+    return () => {
+      if (stagedImage) URL.revokeObjectURL(stagedImage.previewUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="civic-conversation-studio crosshair-corner" aria-label="Citizen Intake Conversation Studio">
@@ -325,9 +393,58 @@ export const ConversationStudio: React.FC<ConversationStudioProps> = ({
                   )}
                 </div>
               ) : (
-                /* Citizen Plain Text Bubble */
+                              /* Citizen Plain Text Bubble — may carry an image + relevance badge */
                 <div className="citizen-text-bubble animate-fade-in">
                   <div className="turn-body-text">{msg.text}</div>
+
+                  {/* Attached Image Thumbnail */}
+                  {msg.imagePreviewUrl && (
+                    <div className="citizen-image-attachment">
+                      <img
+                        src={msg.imagePreviewUrl}
+                        alt={msg.imageFilename || 'Attached image'}
+                        className="attachment-thumb"
+                      />
+                      {msg.imageFilename && (
+                        <span className="attachment-filename">{msg.imageFilename}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Vision AI Relevance Badge — advisory only */}
+                  {msg.relevanceAssessment && (
+                    <div
+                      className={`relevance-badge relevance-${
+                        msg.relevanceAssessment.relevance === EvidenceRelevanceOutcome.RELATED
+                          ? 'related'
+                          : msg.relevanceAssessment.relevance === EvidenceRelevanceOutcome.NOT_RELATED
+                          ? 'not-related'
+                          : 'uncertain'
+                      }`}
+                      title={msg.relevanceAssessment.reason}
+                      aria-label={`Vision AI assessment: ${msg.relevanceAssessment.relevance}`}
+                    >
+                      {msg.relevanceAssessment.relevance === EvidenceRelevanceOutcome.RELATED ? (
+                        <CheckCircle2 size={11} />
+                      ) : msg.relevanceAssessment.relevance === EvidenceRelevanceOutcome.NOT_RELATED ? (
+                        <XCircle size={11} />
+                      ) : (
+                        <HelpCircle size={11} />
+                      )}
+                      <span className="relevance-badge-label">
+                        VISION AI · 
+                        {msg.relevanceAssessment.relevance === EvidenceRelevanceOutcome.RELATED
+                          ? 'RELEVANT'
+                          : msg.relevanceAssessment.relevance === EvidenceRelevanceOutcome.NOT_RELATED
+                          ? 'NOT RELEVANT'
+                          : 'UNCERTAIN'}
+                      </span>
+                      {!msg.relevanceAssessment.ai_available && (
+                        <span className="relevance-offline-tag">OFFLINE</span>
+                      )}
+                    </div>
+                  )}
+
                   <div className="turn-meta-time">
                     <span className="turn-time">
                       {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -383,10 +500,12 @@ export const ConversationStudio: React.FC<ConversationStudioProps> = ({
           </div>
         ))}
 
-        {loading && (
+        {(loading || isAssessingImage) && (
           <div className="stream-reasoning-indicator" aria-label="JARVIS Civic is analyzing your grievance">
             <div className="reasoning-pulse" />
-            <span className="technical-label">SYNTHESIZING CIVIC TELEMETRY...</span>
+            <span className="technical-label">
+              {isAssessingImage ? 'VISION AI // SCANNING IMAGE...' : 'SYNTHESIZING CIVIC TELEMETRY...'}
+            </span>
           </div>
         )}
 
@@ -461,17 +580,7 @@ export const ConversationStudio: React.FC<ConversationStudioProps> = ({
 
               {/* Console Action Buttons */}
               <div className="voice-console-actions">
-                {!isListening ? (
-                  <button
-                    type="button"
-                    className="btn-start-record"
-                    onClick={handleStartRecording}
-                    aria-label="Start recording"
-                  >
-                    <Mic size={14} />
-                    <span>START RECORDING</span>
-                  </button>
-                ) : (
+                {isListening ? (
                   <button
                     type="button"
                     className="btn-stop-record"
@@ -480,6 +589,37 @@ export const ConversationStudio: React.FC<ConversationStudioProps> = ({
                   >
                     <MicOff size={14} />
                     <span>STOP & SEND RECORDING</span>
+                  </button>
+                ) : transcript.trim() ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-send-voice"
+                      onClick={handleStopAndSendVoice}
+                      aria-label="Send captured voice message"
+                    >
+                      <Send size={14} />
+                      <span>SEND VOICE MESSAGE</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-start-record"
+                      onClick={handleStartRecording}
+                      aria-label="Re-record voice"
+                    >
+                      <Mic size={14} />
+                      <span>RE-RECORD</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-start-record"
+                    onClick={handleStartRecording}
+                    aria-label="Start recording"
+                  >
+                    <Mic size={14} />
+                    <span>START RECORDING</span>
                   </button>
                 )}
                 <button
@@ -498,7 +638,40 @@ export const ConversationStudio: React.FC<ConversationStudioProps> = ({
 
       {/* Unified Text Composer at Bottom */}
       <div className="studio-composer-shell">
+        {/* Staged Image Preview Strip */}
+        {stagedImage && (
+          <div className="composer-image-preview-strip" aria-label="Staged image attachment">
+            <img
+              src={stagedImage.previewUrl}
+              alt={stagedImage.file.name}
+              className="preview-strip-thumb"
+            />
+            <div className="preview-strip-meta">
+              <span className="preview-strip-filename">{stagedImage.file.name}</span>
+              <span className="preview-strip-hint">Vision AI will assess relevance on send</span>
+            </div>
+            <button
+              type="button"
+              className="btn-preview-strip-remove"
+              onClick={handleRemoveImage}
+              aria-label="Remove attached image"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
+
         <div className="composer-input-container">
+          {/* Hidden file input for image attachment */}
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: 'none' }}
+            aria-hidden="true"
+            onChange={handleImageSelect}
+          />
+
           <textarea
             ref={textareaRef}
             className="composer-textarea"
@@ -507,11 +680,23 @@ export const ConversationStudio: React.FC<ConversationStudioProps> = ({
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Describe what happened or speak naturally... (Press Enter to send, Shift+Enter for newline)"
-            disabled={loading || isListening}
+            disabled={loading || isListening || isAssessingImage}
             aria-label="Describe what happened"
           />
 
           <div className="composer-actions-cluster">
+            {/* Image Attach Button */}
+            <button
+              type="button"
+              className={`btn-composer-attach ${stagedImage ? 'active' : ''}`}
+              onClick={() => imageInputRef.current?.click()}
+              title={stagedImage ? `Image attached: ${stagedImage.file.name}` : 'Attach image evidence'}
+              aria-label="Attach image"
+              disabled={loading || isAssessingImage}
+            >
+              <Paperclip size={15} />
+            </button>
+
             <button
               type="button"
               className={`btn-composer-mic ${isVoiceConsoleOpen ? 'active' : ''}`}
@@ -526,7 +711,7 @@ export const ConversationStudio: React.FC<ConversationStudioProps> = ({
               type="button"
               className="btn-composer-send"
               onClick={handleSendText}
-              disabled={!inputText.trim() || loading || isListening}
+              disabled={!inputText.trim() || loading || isListening || isAssessingImage}
               aria-label="Send message"
               title="Send message"
             >

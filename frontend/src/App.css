@@ -98,6 +98,12 @@
   box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
 }
 
+.case-created-banner.resolved-state {
+  border-color: var(--civic-emerald);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, var(--bg-surface-1) 100%);
+  box-shadow: 0 4px 24px rgba(16, 185, 129, 0.25);
+}
+
 .case-banner-icon {
   margin-top: 0.15rem;
 }
@@ -168,8 +174,38 @@
   gap: 0.5rem;
 }
 
+.intake-prehead-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
 .intake-prehead {
   margin-bottom: 0.2rem;
+}
+
+.btn-workspace-reset-session {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-workspace-reset-session:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.25);
 }
 
 .intake-headline {

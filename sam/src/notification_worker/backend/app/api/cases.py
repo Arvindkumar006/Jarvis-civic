@@ -9,7 +9,7 @@ from typing import Any, List, Optional, Union
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
 from app.config.settings import settings
-from app.models.enums import CaseStatus, validate_status_transition
+from app.models.enums import CaseStatus, ControlledDepartment, validate_status_transition
 from app.models.evidence import (
     DeterministicValidationStatus,
     EvidenceResponse,
@@ -29,6 +29,7 @@ from app.models.security import (
     CivicCaseUpdateRequest,
     EvidenceMetadata,
     PublicCaseHistoryItem,
+    ResolutionConfirmationRequest,
     ResolutionNoteRequest,
 )
 from app.models.notification import SanitizedNotificationItem, mask_email
@@ -51,6 +52,14 @@ def create_case(
     principal: ApplicationPrincipal = Depends(get_current_principal),
 ) -> CivicCaseRecord:
     """Create a new civic grievance case (Protected by Cedar: create_case)."""
+    # Default operational department if not specified
+    if not payload.department:
+        desc_lower = (payload.description or "").lower()
+        if any(w in desc_lower for w in ["water", "flood", "drain", "sewage", "storm", "manhole", "culvert"]):
+            payload.department = ControlledDepartment.DRAINAGE_STORMWATER
+        else:
+            payload.department = ControlledDepartment.PWD_ROADS
+
     # Enforce policy via PEP
     pep.enforce(
         principal=principal,
@@ -487,6 +496,160 @@ def reject_resolution(
     return updated or case
 
 
+@router.post("/{case_id}/resolution/request-confirmation", response_model=CivicCaseRecord)
+def request_citizen_confirmation(
+    case_id: str,
+    payload: ResolutionConfirmationRequest = ResolutionConfirmationRequest(),
+    principal: ApplicationPrincipal = Depends(get_current_principal),
+) -> CivicCaseRecord:
+    """Request citizen confirmation on submitted resolution evidence (Protected by Cedar: request_citizen_confirmation).
+
+    Permitted exclusively for AuthorityOfficer and MunicipalSupervisor within matching department scope.
+    Strictly denied for Administrator, Citizen, and Public roles.
+    """
+    case = case_store.get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+
+    # 1. Enforce Cedar authorization FIRST (fail-closed)
+    pep.enforce(
+        principal=principal,
+        action=CivicAction.REQUEST_CITIZEN_CONFIRMATION,
+        resource_id=case.case_id,
+        resource_type="CivicCase",
+        resource_owner=case.owner_id,
+        resource_department=case.department,
+        resource_status=case.status.value,
+        is_public=case.is_public,
+    )
+
+    # 2. Gate Condition: case.status == UNDER_REVIEW
+    if case.status != CaseStatus.UNDER_REVIEW:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot request citizen confirmation: case must be in 'UNDER_REVIEW' status, currently '{case.status.value}'.",
+        )
+
+    # 3. Gate Condition: active resolution attempt exists
+    if not case.active_resolution_attempt:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot request citizen confirmation: no active resolution attempt exists for this docket.",
+        )
+
+    # 4. Gate Condition: valid deterministic RESOLUTION_EVIDENCE exists
+    evidence_records = evidence_repo.list_evidence_for_case(case_id)
+    valid_resolution_ev = [
+        e for e in evidence_records
+        if e.evidence_type == EvidenceType.RESOLUTION_EVIDENCE
+        and e.validation_status == DeterministicValidationStatus.VALID
+    ]
+    if not valid_resolution_ev:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot request citizen confirmation: docket lacks verified resolution evidence with valid deterministic validation.",
+        )
+
+    # 5. Gate Condition: resolution evidence belongs to the active attempt
+    attempt_ev = [
+        e for e in valid_resolution_ev
+        if e.resolution_attempt == case.active_resolution_attempt
+    ]
+    if not attempt_ev:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot request citizen confirmation: no valid resolution evidence found belonging to active attempt '{case.active_resolution_attempt}'.",
+        )
+
+    # 6. Gate Condition: active resolution attempt is not rejected
+    # If case was rejected, evidence uploaded prior to or at rejection timestamp belongs to a rejected attempt
+    if case.resolution_rejected_at is not None:
+        fresh_attempt_ev = [
+            e for e in attempt_ev
+            if e.created_at > case.resolution_rejected_at
+        ]
+        if not fresh_attempt_ev:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot request citizen confirmation: active resolution attempt was rejected. New resolution evidence and corrective rework must be submitted.",
+            )
+
+    # 7. Gate Condition: non-empty persisted resolution message exists
+    # Single authoritative message rule:
+    # Use existing persisted message on case or active evidence record; do NOT overwrite!
+    effective_msg = case.resolution_message
+    if not effective_msg or not effective_msg.strip():
+        for ev in attempt_ev:
+            if getattr(ev, "resolution_message", None) and ev.resolution_message.strip():
+                effective_msg = ev.resolution_message.strip()
+                break
+
+    if not effective_msg or not effective_msg.strip():
+        # If payload provides a message, populate it if absent
+        if payload.message and payload.message.strip():
+            effective_msg = payload.message.strip()
+            case_store.set_active_resolution_attempt(
+                case_id=case_id,
+                attempt_id=case.active_resolution_attempt,
+                resolution_message=effective_msg,
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot request citizen confirmation: non-empty persisted resolution message required.",
+            )
+
+    # 8. Persist confirmation request in backend store
+    updated = case_store.request_citizen_confirmation(
+        case_id=case_id,
+        actor_label=principal.role.value,
+    )
+
+    # 9. Record append-only workflow audit event
+    try:
+        audit_dispatcher.record_workflow_event(
+            case_id=case_id,
+            event_type="CITIZEN_CONFIRMATION_REQUESTED",
+            previous_status=case.status.value,
+            new_status=case.status.value,
+            principal=principal,
+            outcome="SUCCESS",
+            metadata={
+                "active_attempt": case.active_resolution_attempt,
+                "resolution_message": effective_msg,
+                "evidence_count": len(attempt_ev),
+            },
+        )
+    except Exception as audit_err:
+        import logging
+        logging.getLogger("jarvis.api.cases").critical(
+            "Audit event recording failed on request citizen confirmation for case %s: %s", case_id, audit_err
+        )
+
+    # 10. Update OpenSearch docket index
+    try:
+        opensearch_service.update_docket(updated or case)
+    except Exception as os_err:
+        import logging
+        logging.getLogger("jarvis.api.cases").error(
+            "OpenSearch update exception on request citizen confirmation %s: %s", case_id, os_err
+        )
+
+    # 11. Dispatch notification to citizen alerting them that confirmation is requested
+    try:
+        worker_dispatcher.dispatch_resolution_ready(
+            case=updated or case,
+            proposed_notes=effective_msg,
+        )
+    except Exception as notif_err:
+        import logging
+        logging.getLogger("jarvis.api.cases").critical(
+            "Notification dispatch exception on request citizen confirmation %s: %s", case_id, notif_err
+        )
+
+    return updated or case
+
+
 @router.post("/{case_id}/notes", response_model=CivicCaseRecord)
 @router.post("/{case_id}/resolution-note", response_model=CivicCaseRecord)
 def add_resolution_note(
@@ -614,6 +777,7 @@ async def upload_case_evidence(
     file: UploadFile = File(...),
     evidence_type: EvidenceType = Form(EvidenceType.CASE_EVIDENCE),
     resolution_attempt: Optional[str] = Form(None),
+    resolution_message: Optional[str] = Form(None),
     principal: ApplicationPrincipal = Depends(get_current_principal),
 ) -> EvidenceResponse:
     """Upload, verify, and attach evidence to a civic case.
@@ -681,6 +845,7 @@ async def upload_case_evidence(
         content_type=content_type,
         evidence_type=evidence_type,
         resolution_attempt=resolution_attempt,
+        resolution_message=resolution_message,
     )
 
 

@@ -64,6 +64,11 @@ export enum LocationSource {
   MAP_SELECTED = 'MAP_SELECTED',
   GEOCODED = 'GEOCODED',
   UNCONFIRMED = 'UNCONFIRMED',
+  GEOCODED_EXACT = 'GEOCODED_EXACT',
+  GEOCODED_LOCALITY = 'GEOCODED_LOCALITY',
+  GAZETTEER_FALLBACK = 'GAZETTEER_FALLBACK',
+  USER_CONFIRMED = 'USER_CONFIRMED',
+  UNRESOLVED = 'UNRESOLVED',
 }
 
 export interface AuditEvent {
@@ -117,6 +122,9 @@ export interface CanonicalCivicState {
   description?: string | null;
   location?: string | null;
   location_text?: string | null;
+  street?: string | null;
+  area?: string | null;
+  locality?: string | null;
   landmark?: string | null;
   pincode?: string | null;
   latitude?: number | null;
@@ -141,6 +149,8 @@ export interface ConversationRequest {
   session_id: string;
   message: string;
   language?: string;
+  previous_state?: CanonicalCivicState | null;
+  missing_fields?: string[];
 }
 
 export interface ConversationResponse {
@@ -184,6 +194,9 @@ export interface CivicCaseRecord {
   citizen_feedback?: string | null;
   rejection_count?: number;
   active_resolution_attempt?: string | null;
+  confirmation_requested?: boolean;
+  confirmation_requested_at?: string | null;
+  resolution_message?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -201,6 +214,32 @@ export enum CivicEvidenceType {
   RESOLUTION_EVIDENCE = 'RESOLUTION_EVIDENCE',
 }
 
+// ------------------------------------------------------------------
+// Vision AI Relevance Pipeline (Phase 8.9)
+// ------------------------------------------------------------------
+
+export enum EvidenceRelevanceOutcome {
+  RELATED = 'RELATED',
+  NOT_RELATED = 'NOT_RELATED',
+  UNCERTAIN = 'UNCERTAIN',
+}
+
+export interface EvidenceRelevanceAssessment {
+  relevance: EvidenceRelevanceOutcome;
+  reason: string;
+  detected_features: string[];
+  confidence: number | null;
+  model_id: string | null;
+  ai_available: boolean;
+}
+
+/** Minimal image attachment staged in the composer before submission. */
+export interface StagedImageAttachment {
+  file: File;
+  /** Object URL for preview — must be revoked after use. */
+  previewUrl: string;
+}
+
 export enum VerificationOutcome {
   VERIFIED = 'VERIFIED',
   LIKELY_VERIFIED = 'LIKELY_VERIFIED',
@@ -215,14 +254,24 @@ export interface EvidenceResponse {
   filename: string;
   content_type: string;
   size_bytes: number;
-  sha256: string;
+  sha256?: string;
+  sha256_hash?: string;
   validation_status: string;
   verification_status: VerificationOutcome;
-  verification_reason: string;
+  verification_reason?: string;
   ai_confidence?: number | null;
+  relevance?: string | null;
+  relevance_reason?: string | null;
+  relevance_detected_features?: string[];
+  relevance_confidence?: number | null;
   resolution_attempt?: string | null;
+  resolution_message?: string | null;
+  uploaded_by_role?: string;
+  uploaded_by_principal?: string;
+  uploaded_by_department?: string;
   object_key?: string | null;
   s3_uri?: string | null;
+  is_advisory?: boolean;
   created_at: string;
   verified_at?: string | null;
 }
@@ -273,6 +322,12 @@ export interface ChatMessage {
     department?: string;
     urgency?: string;
   };
+  /** Image attached by the citizen alongside this message (advisory only). */
+  imagePreviewUrl?: string | null;
+  /** Filename of the attached image for display. */
+  imageFilename?: string | null;
+  /** Vision AI relevance assessment result (advisory, never authoritative). */
+  relevanceAssessment?: EvidenceRelevanceAssessment | null;
 }
 
 export interface LoginCredentials {

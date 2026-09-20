@@ -127,9 +127,25 @@ class OllamaEvidenceAssessmentProvider(EvidenceAssessmentProvider):
     or the model does not support the artifact modality.
     """
 
-    def __init__(self, endpoint_url: Optional[str] = None, model: Optional[str] = None):
+    def __init__(
+        self,
+        endpoint_url: Optional[str] = None,
+        model: Optional[str] = None,
+        text_model: Optional[str] = None,
+        vision_model: Optional[str] = None,
+    ):
         self.endpoint_url = (endpoint_url or getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")).rstrip("/")
-        self.model = model or getattr(settings, "JARVIS_LLM_MODEL", "llama3.2:3b")
+        # If legacy single-model param is explicitly passed (e.g. in tests), apply it to both text and vision
+        if model is not None:
+            self.text_model = model
+            self.vision_model = vision_model or model
+        else:
+            _text_default = getattr(settings, "OLLAMA_TEXT_MODEL", None) or getattr(settings, "JARVIS_LLM_MODEL", "llama3.2:3b")
+            _vision_default = getattr(settings, "OLLAMA_VISION_MODEL", "llama3.2-vision")
+            self.text_model = text_model or _text_default
+            self.vision_model = vision_model or _vision_default
+        # Expose self.model for backwards-compat references
+        self.model = self.text_model
 
     def is_available(self) -> bool:
         try:
@@ -150,26 +166,31 @@ class OllamaEvidenceAssessmentProvider(EvidenceAssessmentProvider):
         file_bytes: bytes,
         resolution_attempt: Optional[str] = None,
     ) -> EvidenceAssessmentResult:
-        # Check artifact modality
+        # Check artifact modality — select appropriate model
         is_image = content_type.startswith("image/")
         is_audio = content_type.startswith("audio/")
         is_text = content_type == "text/plain" or filename.endswith(".txt")
 
-        # Modality check 1: Image artifacts require a multimodal vision model
-        if is_image and not is_multimodal_vision_model(self.model):
-            logger.info(
-                "Model '%s' is text-only; cannot inspect image '%s'. Returning safe UNCERTAIN.",
-                self.model, filename,
-            )
-            return EvidenceAssessmentResult(
-                outcome=VerificationOutcome.UNCERTAIN,
-                reason=f"Configured model '{self.model}' is text-only and does not support image analysis; deterministic validation passed without AI assessment.",
-                detected_characteristics=["unsupported_modality", "text_only_model"],
-                confidence=None,
-                provider_id="ollama",
-                model_id=self.model,
-                ai_available=False,
-            )
+        # Auto-select vision model for image evidence, text model for everything else
+        if is_image:
+            active_model = self.vision_model
+            if not is_multimodal_vision_model(active_model):
+                # Vision model name doesn't look like a vision model — fall back safely
+                logger.info(
+                    "Vision model '%s' does not appear to support images; returning safe UNCERTAIN.",
+                    active_model,
+                )
+                return EvidenceAssessmentResult(
+                    outcome=VerificationOutcome.UNCERTAIN,
+                    reason=f"Configured model '{active_model}' is text-only and does not support image analysis; deterministic validation passed without AI assessment.",
+                    detected_characteristics=["unsupported_modality", "vision_model_mismatch"],
+                    confidence=None,
+                    provider_id="ollama",
+                    model_id=active_model,
+                    ai_available=False,
+                )
+        else:
+            active_model = self.text_model
 
         # Modality check 2: Audio artifacts are not processed by text/vision LLM
         if is_audio:
@@ -191,11 +212,11 @@ class OllamaEvidenceAssessmentProvider(EvidenceAssessmentProvider):
                 detected_characteristics=["ai_offline", "deterministic_only"],
                 confidence=None,
                 provider_id="ollama",
-                model_id=self.model,
+                model_id=active_model,
                 ai_available=False,
             )
 
-        # Construct multimodal or text prompt
+        # Construct multimodal or text prompt using the selected model
         if is_image:
             prompt = (
                 f"You are an advisory civic evidence assessor. Inspect this uploaded image to assess whether "
@@ -231,7 +252,7 @@ class OllamaEvidenceAssessmentProvider(EvidenceAssessmentProvider):
 
         try:
             req_dict = {
-                "model": self.model,
+                "model": active_model,
                 "prompt": prompt,
                 "stream": False,
                 "format": "json",
@@ -246,7 +267,8 @@ class OllamaEvidenceAssessmentProvider(EvidenceAssessmentProvider):
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=5.0) as resp:
+            _timeout = 90.0 if is_image else 30.0
+            with urllib.request.urlopen(req, timeout=_timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 response_text = data.get("response", "{}")
                 parsed = json.loads(response_text)
@@ -263,10 +285,10 @@ class OllamaEvidenceAssessmentProvider(EvidenceAssessmentProvider):
                 return EvidenceAssessmentResult(
                     outcome=outcome,
                     reason=str(parsed.get("reason", "Assessment completed."))[:300],
-                    detected_characteristics=list(parsed.get("characteristics", []))[:5],
+                    detected_characteristics=[str(c) for c in list(parsed.get("characteristics", []))[:5]],
                     confidence=conf,
                     provider_id="ollama",
-                    model_id=self.model,
+                    model_id=active_model,
                     ai_available=True,
                 )
         except Exception as exc:
@@ -277,7 +299,7 @@ class OllamaEvidenceAssessmentProvider(EvidenceAssessmentProvider):
                 detected_characteristics=["evaluation_error"],
                 confidence=None,
                 provider_id="ollama",
-                model_id=self.model,
+                model_id=active_model,
                 ai_available=False,
             )
 

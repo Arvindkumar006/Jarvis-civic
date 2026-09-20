@@ -57,7 +57,15 @@ class EvidenceVerificationRepository:
             tmp_path = f"{self._storage_path}.tmp"
             with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
-            os.replace(tmp_path, self._storage_path)
+            try:
+                os.replace(tmp_path, self._storage_path)
+            except OSError:
+                import shutil
+                shutil.copyfile(tmp_path, self._storage_path)
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
         except Exception as err:
             logger.error("Failed to persist evidence store to disk: %s", err)
 

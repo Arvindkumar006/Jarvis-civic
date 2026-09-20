@@ -20,6 +20,8 @@ class Settings(BaseSettings):
 
     # Local LLM & Ollama Configuration (Zero-cost, local-only)
     OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_TEXT_MODEL: str = "llama3.2:3b"
+    OLLAMA_VISION_MODEL: str = "moondream"
     JARVIS_LLM_MODEL: str = "llama3.2:3b"
     LLM_TIMEOUT_SECONDS: float = 5.0
     FALLBACK_ENABLED: bool = True

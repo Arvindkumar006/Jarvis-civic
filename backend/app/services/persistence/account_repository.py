@@ -96,6 +96,17 @@ class LocalAccountRepository(AccountRepository):
                 created_at=now,
                 updated_at=now,
             ),
+            UserAccount(
+                principal_id="citizen-local-02",
+                email="citizen.two@jarviscivic.local",
+                password_hash=default_hash,
+                display_name="Second Citizen User",
+                role=ApplicationRole.CITIZEN,
+                department=None,
+                is_active=True,
+                created_at=now,
+                updated_at=now,
+            ),
             # 2. Authority Officer — Drainage & Stormwater
             UserAccount(
                 principal_id="authority-officer-01",
@@ -108,12 +119,48 @@ class LocalAccountRepository(AccountRepository):
                 created_at=now,
                 updated_at=now,
             ),
-            # 3. Authority Officer — Roads (Same role, different department scope)
+            # 2a. Authority Officer — Drainage (Explicit operational role)
+            UserAccount(
+                principal_id="authority-officer-drainage-01",
+                email="drainage.officer@jarviscivic.local",
+                password_hash=default_hash,
+                display_name="Drainage Officer",
+                role=ApplicationRole.AUTHORITY_OFFICER,
+                department=ControlledDepartment.DRAINAGE_STORMWATER.value,
+                is_active=True,
+                created_at=now,
+                updated_at=now,
+            ),
+            # 2b. Authority Officer — Stormwater (Same department scope DRAINAGE_STORMWATER)
+            UserAccount(
+                principal_id="authority-officer-stormwater-01",
+                email="stormwater.officer@jarviscivic.local",
+                password_hash=default_hash,
+                display_name="Stormwater Officer",
+                role=ApplicationRole.AUTHORITY_OFFICER,
+                department=ControlledDepartment.DRAINAGE_STORMWATER.value,
+                is_active=True,
+                created_at=now,
+                updated_at=now,
+            ),
+            # 3. Authority Officer — Roads (Same role, PWD_ROADS department scope)
             UserAccount(
                 principal_id="authority-officer-roads-01",
                 email="roads.officer@jarviscivic.local",
                 password_hash=default_hash,
                 display_name="Roads Officer",
+                role=ApplicationRole.AUTHORITY_OFFICER,
+                department=ControlledDepartment.PWD_ROADS.value,
+                is_active=True,
+                created_at=now,
+                updated_at=now,
+            ),
+            # 3b. Authority Officer — PWD (Same role, PWD_ROADS department scope)
+            UserAccount(
+                principal_id="authority-officer-pwd-01",
+                email="pwd.officer@jarviscivic.local",
+                password_hash=default_hash,
+                display_name="PWD Officer",
                 role=ApplicationRole.AUTHORITY_OFFICER,
                 department=ControlledDepartment.PWD_ROADS.value,
                 is_active=True,

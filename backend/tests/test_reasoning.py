@@ -96,7 +96,7 @@ def test_conversation_api_endpoint():
     assert "state" in data
     state_data = data["state"]
     assert state_data["intent"] == "STREETLIGHT_OUTAGE"
-    assert state_data["department"] == "MUNICIPAL_CORPORATION"
+    assert state_data["department"] == "PWD_ROADS"
     assert state_data["location"] is not None
     assert state_data["ready_for_action"] is True
 

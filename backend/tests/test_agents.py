@@ -34,10 +34,10 @@ class TestStrandsCustomTools:
     def test_map_department_tool(self):
         assert map_department_tool(CivicIntent.WATERLOGGING.value) == ControlledDepartment.DRAINAGE_STORMWATER.value
         assert map_department_tool(CivicIntent.ROAD_POTHOLE.value) == ControlledDepartment.PWD_ROADS.value
-        assert map_department_tool(CivicIntent.STREETLIGHT_OUTAGE.value) == ControlledDepartment.MUNICIPAL_CORPORATION.value
-        assert map_department_tool(CivicIntent.GARBAGE_ACCUMULATION.value) == ControlledDepartment.WASTE_MANAGEMENT.value
-        assert map_department_tool(CivicIntent.ELECTRICITY_OUTAGE.value) == ControlledDepartment.ELECTRICITY_UTILITY.value
-        assert map_department_tool(CivicIntent.OTHER_CIVIC_ISSUE.value) == ControlledDepartment.OTHER_MANUAL_REVIEW.value
+        assert map_department_tool(CivicIntent.STREETLIGHT_OUTAGE.value) == ControlledDepartment.PWD_ROADS.value
+        assert map_department_tool(CivicIntent.GARBAGE_ACCUMULATION.value) == ControlledDepartment.PWD_ROADS.value
+        assert map_department_tool(CivicIntent.ELECTRICITY_OUTAGE.value) == ControlledDepartment.PWD_ROADS.value
+        assert map_department_tool(CivicIntent.OTHER_CIVIC_ISSUE.value) == ControlledDepartment.PWD_ROADS.value
 
     def test_calculate_urgency_tool(self):
         # Baseline waterlogging

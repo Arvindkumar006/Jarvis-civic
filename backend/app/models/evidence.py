@@ -11,6 +11,8 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
+from app.models.evidence_relevance import EvidenceRelevanceOutcome
+
 
 class EvidenceType(str, Enum):
     """Explicit distinction between citizen case evidence and authority resolution evidence."""
@@ -81,6 +83,10 @@ class EvidenceVerificationRecord(BaseModel):
     ai_available: bool = Field(default=False, description="Whether advisory AI provider was reachable")
     ai_confidence: Optional[float] = Field(default=None, description="Advisory confidence score if genuinely produced")
     detected_characteristics: List[str] = Field(default_factory=list, description="Extracted features or keywords")
+    relevance: Optional[EvidenceRelevanceOutcome] = Field(default=None, description="Visual relevance outcome: RELATED, NOT_RELATED, or UNCERTAIN")
+    relevance_reason: Optional[str] = Field(default=None, description="Visual relevance explanation")
+    relevance_detected_features: List[str] = Field(default_factory=list, description="Visual features detected in image")
+    relevance_confidence: Optional[float] = Field(default=None, description="Advisory relevance confidence")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -107,7 +113,12 @@ class EvidenceRecord(BaseModel):
     verification_reason: str = Field(..., description="Concise explainable assessment reasoning")
     ai_assessment: Optional[str] = Field(default=None, description="Advisory AI assessment explanation")
     ai_confidence: Optional[float] = Field(default=None, description="Advisory AI confidence score")
+    relevance: Optional[EvidenceRelevanceOutcome] = Field(default=None, description="Visual relevance outcome: RELATED, NOT_RELATED, or UNCERTAIN")
+    relevance_reason: Optional[str] = Field(default=None, description="Visual relevance explanation")
+    relevance_detected_features: List[str] = Field(default_factory=list, description="Visual features detected in image")
+    relevance_confidence: Optional[float] = Field(default=None, description="Advisory relevance confidence")
     resolution_attempt: Optional[str] = Field(default=None, description="Resolution attempt identifier for resolution evidence")
+    resolution_message: Optional[str] = Field(default=None, description="Authoritative resolution message entered during evidence upload")
     submitting_authority_principal: Optional[str] = Field(default=None, description="Submitting officer principal ID")
     authority_department: Optional[str] = Field(default=None, description="Submitting officer assigned department")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -131,7 +142,12 @@ class EvidenceResponse(BaseModel):
     verification_status: VerificationOutcome
     verification_reason: str
     ai_confidence: Optional[float] = None
+    relevance: Optional[EvidenceRelevanceOutcome] = None
+    relevance_reason: Optional[str] = None
+    relevance_detected_features: List[str] = Field(default_factory=list)
+    relevance_confidence: Optional[float] = None
     resolution_attempt: Optional[str] = None
+    resolution_message: Optional[str] = None
     object_key: Optional[str] = None
     s3_uri: Optional[str] = None
     is_advisory: bool = True

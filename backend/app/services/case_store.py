@@ -128,9 +128,25 @@ class CaseServiceFacade:
         self,
         case_id: str,
         attempt_id: str,
+        resolution_message: Optional[str] = None,
     ) -> Optional[CivicCaseRecord]:
-        """Record active resolution attempt reference."""
-        return self._case_repo.set_active_resolution_attempt(case_id=case_id, attempt_id=attempt_id)
+        """Record active resolution attempt reference and optional authoritative message."""
+        return self._case_repo.set_active_resolution_attempt(
+            case_id=case_id,
+            attempt_id=attempt_id,
+            resolution_message=resolution_message,
+        )
+
+    def request_citizen_confirmation(
+        self,
+        case_id: str,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        """Record authority request for citizen resolution confirmation."""
+        return self._case_repo.request_citizen_confirmation(
+            case_id=case_id,
+            actor_label=actor_label,
+        )
 
     def list_all_cases(self) -> List[CivicCaseRecord]:
         """Enumerate all persisted cases across storage backend."""

@@ -45,6 +45,7 @@ class CivicAction(str, Enum):
     SEARCH_DOCKETS = "search_dockets"
     ACCEPT_RESOLUTION = "accept_resolution"
     REJECT_RESOLUTION = "reject_resolution"
+    REQUEST_CITIZEN_CONFIRMATION = "request_citizen_confirmation"
 
 
 class ApplicationPrincipal(BaseModel):
@@ -241,6 +242,20 @@ class CitizenResolutionRejectRequest(BaseModel):
         return cleaned
 
 
+class ResolutionConfirmationRequest(BaseModel):
+    """Payload for authority requesting citizen confirmation."""
+
+    message: Optional[str] = Field(default=None, max_length=2000, description="Optional confirming resolution message")
+
+    @field_validator("message", mode="after")
+    @classmethod
+    def clean_message(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            cleaned = v.strip()
+            return cleaned if cleaned else None
+        return v
+
+
 class CivicCaseRecord(BaseModel):
     """Full civic case representation stored in application layer."""
 
@@ -267,6 +282,9 @@ class CivicCaseRecord(BaseModel):
     citizen_feedback: Optional[str] = None
     rejection_count: int = 0
     active_resolution_attempt: Optional[str] = None
+    confirmation_requested: bool = False
+    confirmation_requested_at: Optional[datetime] = None
+    resolution_message: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

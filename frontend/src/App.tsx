@@ -15,12 +15,13 @@ import {
   CivicCaseCreateRequest,
   CivicCaseRecord,
   ApplicationRole,
+  CaseStatus,
 } from './types/civic';
-import { conversationApi, casesApi, healthApi } from './services/api';
+import { conversationApi, casesApi, trackingApi, healthApi } from './services/api';
 import { WorkspaceProvider, useWorkspace } from './context/WorkspaceContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginModal } from './components/Auth/LoginModal';
-import { CheckCircle2, Search, Paperclip, Mic, ArrowRight, MapPin, Sparkles } from 'lucide-react';
+import { CheckCircle2, Search, Paperclip, Mic, ArrowRight, MapPin, Sparkles, RotateCcw } from 'lucide-react';
 import './App.css';
 
 const LOCAL_STORAGE_DOCKETS_KEY = 'jarvis_civic_recent_dockets';
@@ -139,7 +140,7 @@ const AppContent: React.FC = () => {
   };
 
   // Session & Conversation state
-  const [sessionId] = useState<string>(
+  const [sessionId, setSessionId] = useState<string>(
     () => `session-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
   );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -202,6 +203,38 @@ const AppContent: React.FC = () => {
     });
   }, []);
 
+  // Synchronize createdCase with authoritative backend CaseStore status
+  useEffect(() => {
+    if (!createdCase?.case_id) return;
+    let isCancelled = false;
+
+    const syncCaseStatus = async () => {
+      try {
+        const latest = await casesApi.getCase(
+          createdCase.case_id,
+          session.role,
+          session.principalId,
+          session.department
+        );
+        if (!isCancelled && latest && latest.status !== createdCase.status) {
+          setCreatedCase(latest);
+        }
+      } catch {
+        // Fallback to public tracking projection if direct case query is restricted
+        try {
+          const tracking = await trackingApi.getTracking(createdCase.case_id);
+          if (!isCancelled && tracking && tracking.status && tracking.status !== createdCase.status) {
+            setCreatedCase((prev) => (prev ? { ...prev, status: tracking.status as CaseStatus } : null));
+          }
+        } catch {
+          // If fetch fails, DO NOT revert to DOCKET_CREATED. Preserve existing state.
+        }
+      }
+    };
+
+    syncCaseStatus();
+  }, [createdCase?.case_id, activeTab, session.role, session.principalId, session.department]);
+
   // Core text conversation submission handler
   const handleSendMessage = async (text: string) => {
     if (!text.trim() || isProcessing) return;
@@ -221,6 +254,9 @@ const AppContent: React.FC = () => {
       const response = await conversationApi.intake({
         message: text.trim(),
         session_id: sessionId,
+        language: canonicalState?.citizen_language || canonicalState?.language || undefined,
+        previous_state: canonicalState,
+        missing_fields: canonicalState?.missing_fields,
       });
 
       setCanonicalState(response.state);
@@ -285,6 +321,9 @@ const AppContent: React.FC = () => {
       const response = await conversationApi.intake({
         message: transcriptText.trim(),
         session_id: sessionId,
+        language: langName || canonicalState?.citizen_language || canonicalState?.language || undefined,
+        previous_state: canonicalState,
+        missing_fields: canonicalState?.missing_fields,
       });
 
       setCanonicalState(response.state);
@@ -322,7 +361,7 @@ const AppContent: React.FC = () => {
     }
   };
 
-  // Reset conversation session
+  // Reset conversation session without deleting persisted cases
   const handleResetConversation = () => {
     setMessages([]);
     setCanonicalState(null);
@@ -330,28 +369,55 @@ const AppContent: React.FC = () => {
     setCreatedCase(null);
     setConfirmedLocation(null);
     setSelectedCoordinates(null);
+    setSessionId(`session-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`);
   };
+
+  // Creation lock to prevent duplicate submissions
+  const [isCreatingCase, setIsCreatingCase] = useState(false);
 
   // Create Case Docket handler
   const handleCreateCase = async (payload: CivicCaseCreateRequest) => {
-    const fullPayload: CivicCaseCreateRequest = {
-      description: payload.description,
-      location: confirmedLocation || payload.location,
-      department: payload.department,
-      pincode: payload.pincode,
-      is_public: true,
-      latitude: payload.latitude ?? selectedCoordinates?.lat ?? null,
-      longitude: payload.longitude ?? selectedCoordinates?.lng ?? null,
-      location_source:
-        payload.location_source ??
-        selectedCoordinates?.source ??
-        (payload.location ? 'TEXT_REFERENCE' : 'UNCONFIRMED'),
-    };
+    if (isCreatingCase || createdCase) return;
+    setIsCreatingCase(true);
+    try {
+      const fullPayload: CivicCaseCreateRequest = {
+        description: payload.description,
+        location: confirmedLocation || payload.location,
+        department: payload.department,
+        pincode: payload.pincode,
+        is_public: true,
+        latitude: payload.latitude ?? selectedCoordinates?.lat ?? null,
+        longitude: payload.longitude ?? selectedCoordinates?.lng ?? null,
+        location_source:
+          payload.location_source ??
+          selectedCoordinates?.source ??
+          (payload.location ? 'TEXT_REFERENCE' : 'UNCONFIRMED'),
+      };
 
-    const newCase = await casesApi.createCase(fullPayload, session.principalId);
-    setCreatedCase(newCase);
-    saveDocketId(newCase.case_id);
-    setIsDocketModalOpen(false);
+      const newCase = await casesApi.createCase(fullPayload, session.principalId);
+
+      // Authoritative synchronization: fetch from CaseStore to ensure complete persisted state
+      let authoritativeRecord = newCase;
+      try {
+        const fetched = await casesApi.getCase(
+          newCase.case_id,
+          session.role,
+          session.principalId,
+          session.department
+        );
+        if (fetched) {
+          authoritativeRecord = fetched;
+        }
+      } catch {
+        // Fallback to returned newCase if immediate re-fetch fails
+      }
+
+      setCreatedCase(authoritativeRecord);
+      saveDocketId(authoritativeRecord.case_id);
+      setIsDocketModalOpen(false);
+    } finally {
+      setIsCreatingCase(false);
+    }
   };
 
   // Switch to Evidence Studio with specific case
@@ -427,8 +493,28 @@ const AppContent: React.FC = () => {
           <div className="report-tab-container">
             {/* Top Civic Intelligence Intake Banner */}
             <div className="report-intake-header">
-              <div className="intake-prehead">
-                <span className="technical-label">CIVIC INTELLIGENCE INTERFACE // LIVE INTAKE</span>
+              <div className="intake-prehead-row">
+                <div className="intake-prehead">
+                  <span className="technical-label">CIVIC INTELLIGENCE INTERFACE // LIVE INTAKE</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-workspace-reset-session"
+                  onClick={() => {
+                    if (messages.length > 0) {
+                      if (window.confirm('Reset current civic intake session? This will clear current conversation and draft.')) {
+                        handleResetConversation();
+                      }
+                    } else {
+                      handleResetConversation();
+                    }
+                  }}
+                  title="Start a new session"
+                  aria-label="Reset Session"
+                >
+                  <RotateCcw size={13} />
+                  <span>↻ Reset Session</span>
+                </button>
               </div>
               <h1 className="intake-headline">Tell us what needs attention.</h1>
               <p className="intake-subheading">
@@ -459,16 +545,28 @@ const AppContent: React.FC = () => {
 
             {/* Case Creation Success Banner */}
             {createdCase && (
-              <div className="case-created-banner crosshair-corner" role="status">
+              <div
+                className={`case-created-banner crosshair-corner ${
+                  createdCase.status === CaseStatus.RESOLVED || (createdCase.status as string) === 'RESOLVED'
+                    ? 'resolved-state'
+                    : ''
+                }`}
+                role="status"
+              >
                 <div className="case-banner-icon">
                   <CheckCircle2 size={20} color="var(--civic-emerald)" />
                 </div>
                 <div className="case-banner-body">
                   <div className="case-banner-title">
-                    CIVIC ACTION DOCKET CREATED // CASE ID GENERATED
+                    {createdCase.status === CaseStatus.RESOLVED || (createdCase.status as string) === 'RESOLVED'
+                      ? `CIVIC ACTION DOCKET RESOLVED // CASE ID: ${createdCase.case_id}`
+                      : 'CIVIC ACTION DOCKET CREATED // CASE ID GENERATED'}
                   </div>
                   <div className="case-banner-meta">
-                    DOCKET ID: <span className="case-id-code">{createdCase.case_id}</span> • ROUTED TO:{' '}
+                    DOCKET ID: <span className="case-id-code">{createdCase.case_id}</span> • STATUS:{' '}
+                    <strong style={{ color: (createdCase.status as string) === 'RESOLVED' ? 'var(--civic-emerald)' : undefined }}>
+                      {createdCase.status ? createdCase.status.replace(/_/g, ' ') : 'DOCKET CREATED'}
+                    </strong> • ROUTED TO:{' '}
                     <strong>{createdCase.department.replace(/_/g, ' ')}</strong>
                   </div>
                   <div className="case-banner-actions">
@@ -545,7 +643,13 @@ const AppContent: React.FC = () => {
                 <ExtractionHUD
                   state={canonicalState}
                   isLoading={isProcessing}
-                  onOpenDocketReview={() => setIsDocketModalOpen(true)}
+                  createdCase={createdCase}
+                  onOpenDocketReview={() => {
+                    if (!createdCase) {
+                      setIsDocketModalOpen(true);
+                    }
+                  }}
+                  onTrackDocket={handleSelectCaseForTracking}
                 />
               </section>
 
@@ -553,10 +657,16 @@ const AppContent: React.FC = () => {
               <section className="zone-map" aria-label="Live Civic Signal Map">
                 <CivicMap
                   locationName={canonicalState?.location || undefined}
+                  street={canonicalState?.street || undefined}
+                  area={canonicalState?.area || undefined}
+                  locality={canonicalState?.locality || undefined}
                   landmark={canonicalState?.landmark || undefined}
+                  latitude={canonicalState?.latitude}
+                  longitude={canonicalState?.longitude}
                   interactive={true}
                   allowManualPin={true}
-                  onLocationSelect={(lat, lng, name) => {
+                  onLocationSelect={(lat, lng, name, source) => {
+                    const chosenSource = source || 'MAP_SELECTED';
                     setSelectedCoordinates({ lat, lng, source: 'MAP_SELECTED' });
                     setConfirmedLocation(name || 'Map-Confirmed Location');
                     setCanonicalState((prev) =>
@@ -565,7 +675,7 @@ const AppContent: React.FC = () => {
                             ...prev,
                             latitude: lat,
                             longitude: lng,
-                            location_source: 'MAP_SELECTED',
+                            location_source: chosenSource,
                             location: prev.location || name || 'Map-Confirmed Location',
                           }
                         : null
@@ -617,7 +727,7 @@ const AppContent: React.FC = () => {
 
       {/* Action Docket Review Modal */}
       <ActionDocketModal
-        isOpen={isDocketModalOpen}
+        isOpen={isDocketModalOpen && !createdCase}
         state={canonicalState}
         onClose={() => setIsDocketModalOpen(false)}
         onSubmitCase={handleCreateCase}

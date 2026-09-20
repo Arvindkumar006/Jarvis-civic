@@ -29,6 +29,13 @@ INTENT_KEYWORD_PATTERNS = [
             r"தண்ணீர்\s*தேக்கம்",
             r"पानी\s*भर",
             r"जलभराव",
+            r"जल\s*জমে",
+            r"জল",
+            r"पाणी\s*साचले",
+            r"నీరు\s*నిలిచి",
+            r"నీరు",
+            r"ನೀರು\s*ನಿಂತಿದೆ",
+            r"ನೀರು",
         ],
     ),
     (
@@ -42,6 +49,13 @@ INTENT_KEYWORD_PATTERNS = [
             r"gutter",
             r"நாலா",
             r"கழிவுநீர்",
+            r"नाली\s*जाम",
+            r"गंदा\s*पानी",
+            r"డ్రైనేజీ",
+            r"కాలువ",
+            r"ಚರಂಡಿ",
+            r"নর্দমা",
+            r"गटार",
         ],
     ),
     (
@@ -53,9 +67,19 @@ INTENT_KEYWORD_PATTERNS = [
             r"damaged\s+road",
             r"crater",
             r"ரோடு\s*பள்ளம்",
+            r"பள்ளம்",
+            r"குழி",
             r"सड़क\s*खराब",
             r"गड्ढा",
             r"गड्ढे",
+            r"खड्डा",
+            r"खड्डे",
+            r"గుంత",
+            r"గుంటలు",
+            r"ಗುಂಡಿ",
+            r"ರಸ್ತೆ\s*ಗುಂಡಿ",
+            r"খানাখন্দ",
+            r"ভাঙা\s*রাস্তা",
         ],
     ),
     (
@@ -67,7 +91,14 @@ INTENT_KEYWORD_PATTERNS = [
             r"dark\s+street",
             r"light\s*outage",
             r"தெரு\s*விளக்கு",
+            r"விளக்கு\s*எரியவில்லை",
             r"स्ट्रीट\s*लाइट",
+            r"बत्ती\s*गुल",
+            r"లైట్\s*పనిచేయట్లేదు",
+            r"బల్బు",
+            r"ಬೀದಿ\s*ದೀಪ",
+            r"পথবাति",
+            r"दिवा\s*बंद",
         ],
     ),
     (
@@ -80,8 +111,14 @@ INTENT_KEYWORD_PATTERNS = [
             r"rubbish",
             r"dump",
             r"குப்பை",
+            r"குப்பை\s*மேடு",
             r"कचरा",
             r"कूड़ा",
+            r"घाण",
+            r"చెత్త",
+            r"చెత్తా\s*చెదారం",
+            r"ಕಸ",
+            r"আবর্জনা",
         ],
     ),
     (
@@ -93,7 +130,12 @@ INTENT_KEYWORD_PATTERNS = [
             r"tap\s*water",
             r"drinking\s+water",
             r"தண்ணீர்\s*வரவில்லை",
+            r"குடிநீர்",
             r"पानी\s*नहीं\s*आ\s*रहा",
+            r"नहाने\s*का\s*पानी",
+            r"నీటి\s*సరఫరా",
+            r"ನೀರಿನ\s*ಸಮಸ್ಯೆ",
+            r"পানীয়\s*জল",
         ],
     ),
     (
@@ -106,7 +148,11 @@ INTENT_KEYWORD_PATTERNS = [
             r"sparking\s*wire",
             r"transformer",
             r"மின்சாரம்",
+            r"மின்வெட்டு",
             r"बिजली\s*गुल",
+            r"కరెంట్\s*లేదు",
+            r"ವಿದ್ಯುತ್\s*ಕಡಿತ",
+            r"বিদ্যুৎ\s*বিভ্রাট",
         ],
     ),
     (
@@ -118,19 +164,21 @@ INTENT_KEYWORD_PATTERNS = [
             r"railing",
             r"bench",
             r"public\s+park",
+            r"நடைபாதை",
+            r"फुटपाथ",
+            r"ఫుట్‌పాత్",
+            r"ಕಾಲುದಾರಿ",
         ],
     ),
 ]
 
 
-def detect_language(text: str) -> str:
-    """Detect language based on Unicode character blocks or common tokens."""
+def detect_language(text: str, hint: Optional[str] = None) -> str:
+    """Detect language based on Unicode character blocks, common tokens, or language hint."""
+    # 1. Unicode script detection (authoritative for non-Latin scripts)
     # Tamil Unicode Block: \u0B80-\u0BFF
     if re.search(r"[\u0B80-\u0BFF]", text):
         return "Tamil"
-    # Devanagari (Hindi / Marathi) Block: \u0900-\u097F
-    if re.search(r"[\u0900-\u097F]", text):
-        return "Hindi"
     # Telugu Block: \u0C00-\u0C7F
     if re.search(r"[\u0C00-\u0C7F]", text):
         return "Telugu"
@@ -140,14 +188,39 @@ def detect_language(text: str) -> str:
     # Bengali Block: \u0980-\u09FF
     if re.search(r"[\u0980-\u09FF]", text):
         return "Bengali"
+    # Devanagari (Hindi / Marathi) Block: \u0900-\u097F
+    if re.search(r"[\u0900-\u097F]", text):
+        # Disambiguate Marathi vs Hindi based on Marathi markers
+        if re.search(r"\b(आहे|झाला|झाली|नाही|आहेत|पुणे|रस्त्यावर|कॉलनी)\b", text):
+            return "Marathi"
+        return "Hindi"
 
-    # Hinglish detection via common Romanized Hindi particles
-    hinglish_tokens = ["kahan", "hai", "nahi", "raha", "pani", "yeh", "bahut", "sadak", "kaise", "karein", "ho"]
+    # 2. Hinglish detection via common Romanized Hindi particles
+    hinglish_tokens = ["kahan", "hai", "nahi", "raha", "pani", "yeh", "bahut", "sadak", "kaise", "karein", "ho", "mein", "gaddha", "paas", "ke"]
     words = [w.lower() for w in re.findall(r"\w+", text)]
     if any(tok in words for tok in hinglish_tokens):
         return "Hinglish"
 
+    # 3. Hint-based detection if Latin text
+    if hint:
+        hint_lower = hint.lower()
+        if "ta" in hint_lower or "tamil" in hint_lower:
+            return "Tamil"
+        if "hi" in hint_lower or "hindi" in hint_lower:
+            return "Hindi"
+        if "te" in hint_lower or "telugu" in hint_lower:
+            return "Telugu"
+        if "kn" in hint_lower or "kannada" in hint_lower:
+            return "Kannada"
+        if "bn" in hint_lower or "bengali" in hint_lower:
+            return "Bengali"
+        if "mr" in hint_lower or "marathi" in hint_lower:
+            return "Marathi"
+        if "hinglish" in hint_lower:
+            return "Hinglish"
+
     return "English"
+
 
 
 class RequirementIntentAgent:
@@ -159,13 +232,7 @@ class RequirementIntentAgent:
     def analyze_deterministic(self, message: str, language_hint: Optional[str] = None) -> IntentAnalysis:
         """Deterministic keyword-based intent classification for local resilience."""
         msg_lower = message.lower()
-        detected = detect_language(message)
-        if detected != "English":
-            detected_lang = detected
-        elif language_hint and language_hint.lower() not in ["en", "english"]:
-            detected_lang = language_hint
-        else:
-            detected_lang = "English"
+        detected_lang = detect_language(message, language_hint)
 
         # Check non-civic greetings or gibberish
         clean_msg = re.sub(r"[^\w\s]", "", msg_lower).strip()
@@ -224,8 +291,20 @@ class RequirementIntentAgent:
             "pipeline", "sewage", "gutter", "signal", "lamp", "sidewalk", "footpath", "complaint",
             "nagar", "colony", "ward", "corporation", "municipality", "panchayat", "civic",
             "area", "lane", "avenue", "junction", "sector", "block", "house", "building",
-            "சாலை", "தெரு", "தண்ணீர்", "குப்பை", "விளக்கு", "பள்ளம்",
-            "सड़क", "गली", "पानी", "कचरा", "बिजली", "गड्ढा",
+            "ambattur", "pudur", "chennai", "salai", "delhi", "bengaluru", "mumbai", "pune", "hyderabad", "kolkata",
+            # Tamil
+            "சாலை", "தெரு", "தண்ணீர்", "குப்பை", "விளக்கு", "பள்ளம்", "அம்பத்தூர்", "புதூர்", "சென்னை",
+            "கிண்டி", "அடையாறு", "மயிலாப்பூர்", "ஊர்", "பகுதி", "வட்டம்", "சந்து", "குழி", "கழிவுநீர்", "சாக்கடை",
+            # Hindi
+            "सड़क", "गली", "पानी", "कचरा", "बिजली", "गड्ढा", "चांदनी", "चौक", "मार्ग", "बाजार", "नाला",
+            # Telugu
+            "రోడ్డు", "వీధి", "గుంత", "నీరు", "చెత్త", "అంబత్తూరు", "హైదరాబాద్",
+            # Kannada
+            "ರಸ್ತೆ", "ಗುಂಡಿ", "ನೀರು", "ಕಸ", "ಬೆಂಗಳೂರು",
+            # Bengali
+            "রাস্তা", "চৌরাস্তা", "জল", "আবর্জনা", "কলকাতা",
+            # Marathi
+            "रस्ता", "खड्डा", "पाणी", "पुणे", "कॉलनी",
         ]
         has_civic_term = any(term in msg_lower for term in broad_civic_keywords)
         if not has_civic_term:
@@ -236,6 +315,7 @@ class RequirementIntentAgent:
                 confidence=0.7,
                 initial_description=message.strip(),
             )
+
 
         # Default fallback for unclassified civic issue
         return IntentAnalysis(

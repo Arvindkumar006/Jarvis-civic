@@ -326,6 +326,7 @@ class DynamoDBCaseRepository(CaseRepository):
         now = datetime.now(timezone.utc)
         record.resolution_confirmed = True
         record.resolution_confirmed_at = now
+        record.confirmation_requested = False
         if feedback:
             record.citizen_feedback = feedback
         record.status = CaseStatus.RESOLVED
@@ -354,6 +355,7 @@ class DynamoDBCaseRepository(CaseRepository):
         now = datetime.now(timezone.utc)
         record.resolution_confirmed = False
         record.resolution_rejected_at = now
+        record.confirmation_requested = False
         record.rejection_count += 1
         record.citizen_feedback = reason
         record.status = CaseStatus.UNDER_REVIEW
@@ -375,15 +377,47 @@ class DynamoDBCaseRepository(CaseRepository):
         self,
         case_id: str,
         attempt_id: str,
+        resolution_message: Optional[str] = None,
     ) -> Optional[CivicCaseRecord]:
         now_iso = datetime.now(timezone.utc).isoformat()
         try:
+            expr = "SET active_resolution_attempt = :att, confirmation_requested = :cr, updated_at = :updated_at"
+            vals: Dict[str, Any] = {
+                ":att": attempt_id,
+                ":cr": False,
+                ":updated_at": now_iso,
+            }
+            if resolution_message is not None:
+                expr += ", resolution_message = :rm"
+                vals[":rm"] = resolution_message
             self.table.update_item(
                 Key={"case_id": case_id},
-                UpdateExpression="SET active_resolution_attempt = :att, updated_at = :updated_at",
+                UpdateExpression=expr,
+                ConditionExpression="attribute_exists(case_id)",
+                ExpressionAttributeValues=vals,
+            )
+            return self.get_case(case_id)
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                return None
+            logger.error("DynamoDB set_active_resolution_attempt failed for '%s': %s", case_id, exc)
+            raise
+
+    def request_citizen_confirmation(
+        self,
+        case_id: str,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        try:
+            self.table.update_item(
+                Key={"case_id": case_id},
+                UpdateExpression="SET confirmation_requested = :cr, confirmation_requested_at = :cra, updated_at = :updated_at",
                 ConditionExpression="attribute_exists(case_id)",
                 ExpressionAttributeValues={
-                    ":att": attempt_id,
+                    ":cr": True,
+                    ":cra": now_iso,
                     ":updated_at": now_iso,
                 },
             )
@@ -391,7 +425,7 @@ class DynamoDBCaseRepository(CaseRepository):
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
                 return None
-            logger.error("DynamoDB set_active_resolution_attempt failed for '%s': %s", case_id, exc)
+            logger.error("DynamoDB request_citizen_confirmation failed for '%s': %s", case_id, exc)
             raise
 
     def list_all_cases(self) -> List[CivicCaseRecord]:

@@ -17,6 +17,7 @@ from app.models.enums import (
     LocationSource,
     UrgencyLevel,
 )
+from app.models.evidence_relevance import EvidenceRelevanceOutcome
 
 
 class CanonicalCivicState(BaseModel):
@@ -58,6 +59,18 @@ class CanonicalCivicState(BaseModel):
     location_text: Optional[str] = Field(
         default=None,
         description="Raw textual location representation from user message",
+    )
+    street: Optional[str] = Field(
+        default=None,
+        description="Extracted street or road name in citizen's original language",
+    )
+    area: Optional[str] = Field(
+        default=None,
+        description="Extracted neighborhood or area in citizen's original language",
+    )
+    locality: Optional[str] = Field(
+        default=None,
+        description="Extracted city or administrative locality in original language",
     )
     landmark: Optional[str] = Field(
         default=None,
@@ -102,6 +115,14 @@ class CanonicalCivicState(BaseModel):
     evidence_uris: List[str] = Field(
         default_factory=list,
         description="Storage paths or URIs of attached evidence files",
+    )
+    evidence_relevance: Optional[EvidenceRelevanceOutcome] = Field(
+        default=None,
+        description="Advisory Vision AI assessment: RELATED, NOT_RELATED, or UNCERTAIN",
+    )
+    evidence_relevance_reason: Optional[str] = Field(
+        default=None,
+        description="Explainable advisory assessment summary for attached evidence",
     )
 
     # Language & Conversation Feedback Loop

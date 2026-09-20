@@ -100,4 +100,9 @@ namespace JarvisCivic {
         principal: [Citizen],
         resource: [CivicCase]
     };
+
+    action request_citizen_confirmation appliesTo {
+        principal: [AuthorityOfficer, MunicipalSupervisor],
+        resource: [CivicCase]
+    };
 }

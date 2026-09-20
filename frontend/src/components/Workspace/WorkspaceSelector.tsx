@@ -65,8 +65,8 @@ const ROLES_ORDER: {
 ];
 
 const DEPARTMENTS = [
-  { code: ControlledDepartment.DRAINAGE_STORMWATER, name: 'Drainage & Stormwater' },
-  { code: ControlledDepartment.PWD_ROADS, name: 'PWD / Roads & Bridges' },
+  { code: ControlledDepartment.PWD_ROADS, name: 'PWD / Roads & Bridges (PWD & Roads Authority Scope)' },
+  { code: ControlledDepartment.DRAINAGE_STORMWATER, name: 'Drainage & Stormwater (Drainage & Stormwater Authority Scope)' },
   { code: ControlledDepartment.MUNICIPAL_CORPORATION, name: 'Municipal Corporation General' },
   { code: ControlledDepartment.WASTE_MANAGEMENT, name: 'Solid Waste Management' },
   { code: ControlledDepartment.WATER_SUPPLY, name: 'Metro Water Supply & Sewerage' },

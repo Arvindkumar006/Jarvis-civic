@@ -188,6 +188,40 @@
   gap: 0.35rem;
 }
 
+.signal-location-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+}
+
+.breakdown-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.breakdown-key {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--civic-cyan);
+  text-transform: uppercase;
+  min-width: 60px;
+  letter-spacing: 0.05em;
+}
+
+.breakdown-val {
+  color: var(--text-primary);
+  font-weight: 500;
+  word-break: break-word;
+}
+
 /* Matrix Row */
 .signal-matrix-row {
   display: grid;
@@ -332,6 +366,87 @@
 .unresolved-circle {
   color: var(--civic-amber);
   font-size: 0.7rem;
+}
+
+/* Created Docket Banner */
+.signal-created-banner {
+  background: rgba(0, 255, 157, 0.06);
+  border: 1px solid rgba(0, 255, 157, 0.4);
+  border-radius: var(--radius-xs);
+  padding: 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.signal-created-banner.resolved-state {
+  background: rgba(0, 255, 157, 0.12);
+  border: 1px solid rgba(0, 255, 157, 0.7);
+  box-shadow: 0 0 16px rgba(0, 255, 157, 0.2);
+}
+
+.created-docket-meta-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-xs);
+  border: 1px solid rgba(0, 255, 157, 0.2);
+}
+
+.created-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.created-meta-row .meta-label {
+  color: var(--text-secondary);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  min-width: 65px;
+}
+
+.created-meta-row .meta-case-id {
+  color: var(--civic-cyan);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.created-meta-row .meta-status-val {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.btn-track-civic-docket {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--civic-blue, #0284c7);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-xs);
+  padding: 0.6rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-track-civic-docket:hover {
+  background: var(--civic-blue-hover, #0369a1);
+  box-shadow: 0 0 14px rgba(2, 132, 199, 0.5);
+  transform: translateY(-1px);
+}
+
+.btn-track-civic-docket.illuminated {
+  box-shadow: 0 0 12px rgba(2, 132, 199, 0.4);
 }
 
 /* Ready Transition Banner */

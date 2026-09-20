@@ -204,12 +204,19 @@ class NotificationWorkerDispatcher:
             dest_dir = os.path.join(worker_target, rel) if rel != "." else worker_target
             os.makedirs(dest_dir, exist_ok=True)
             for f in files:
-                if f.endswith(".pyc"):
+                if f.endswith(".pyc") or f.endswith(".json") or f.endswith(".tmp"):
                     continue
                 s_file = os.path.join(root, f)
                 d_file = os.path.join(dest_dir, f)
-                if not os.path.exists(d_file) or os.path.getmtime(s_file) > os.path.getmtime(d_file):
-                    shutil.copy2(s_file, d_file)
+                shutil.copy2(s_file, d_file)
+        # Prune non-source artifacts from worker target
+        for root, _, files in os.walk(worker_target):
+            for f in files:
+                if f.endswith(".json") or f.endswith(".tmp") or f.endswith(".pyc"):
+                    try:
+                        os.remove(os.path.join(root, f))
+                    except OSError:
+                        pass
 
     def invoke_sam_local(
         self,

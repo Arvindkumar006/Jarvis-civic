@@ -1220,169 +1220,248 @@ export const ProductExperience: React.FC<ProductExperienceProps> = ({
         <div className="experience-section-header">
           <div className="section-ruler-tag">
             <span className="ruler-line" />
-            <span className="ruler-text">ACCESS CIVIC WORKSPACE // ROLE SELECTION</span>
+            <span className="ruler-text">ACCESS CIVIC WORKSPACE // ROLE SELECTION & ARCHITECTURAL DOMAINS</span>
             <span className="ruler-line" />
           </div>
-          <h2 className="section-headline">Choose Your Civic Role</h2>
+          <h2 className="section-headline">Choose Your Civic Role & Workspace</h2>
           <p className="section-subheadline">
-            Select an intended workspace below to sign in. The backend verifies your allocated account credentials and authoritatively determines your actual role and department.
+            The operational Authority Workspace contains strictly 5 roles: PWD, Roads, Drainage, Stormwater, and Municipal Supervisor. Citizen, Public Tracking, and Platform Administration remain separate distinct domains.
           </p>
         </div>
 
-        <div className="landing-roles-grid">
-          {/* CITIZEN */}
-          <div className="landing-role-card crosshair-corner" data-testid="role-card-citizen">
-            <div className="role-card-header">
-              <span className="role-card-index">01</span>
-              <span className="role-card-badge badge-citizen">CITIZEN ACCESS</span>
-            </div>
-            <h3 className="role-card-title">Citizen Workspace</h3>
-            <p className="role-card-desc">
-              Report civic grievances in plain speech or text, generate structured action dockets, attach photographic proof, and track progress.
-            </p>
-            <div className="role-card-caps">
-              <span className="cap-tag">• Report Issue</span>
-              <span className="cap-tag">• Track Docket</span>
-              <span className="cap-tag">• Evidence Studio</span>
-            </div>
-            <button
-              type="button"
-              className="btn-enter-role-card btn-role-citizen"
-              onClick={() => openLogin(ApplicationRole.CITIZEN)}
-              aria-label="Enter Citizen Workspace"
-            >
-              <span>ENTER CITIZEN WORKSPACE</span>
-              <ArrowRight size={14} />
-            </button>
+        {/* DOMAIN 1: CITIZEN WORKSPACE */}
+        <div className="workspace-domain-block">
+          <div className="workspace-domain-label">
+            <span className="technical-label">DOMAIN 01 // CITIZEN WORKSPACE</span>
           </div>
-
-          {/* AUTHORITY OFFICER - DRAINAGE */}
-          <div className="landing-role-card crosshair-corner" data-testid="role-card-authority-drainage">
-            <div className="role-card-header">
-              <span className="role-card-index">02</span>
-              <span className="role-card-badge badge-authority">DRAINAGE & STORMWATER</span>
-            </div>
-            <h3 className="role-card-title">Drainage Officer</h3>
-            <p className="role-card-desc">
-              Review assigned flood and drainage dockets, inspect coordinates, and execute authorized lifecycle status transitions under Cedar policy.
-            </p>
-            <div className="role-card-caps">
-              <span className="cap-tag">• Authority Console</span>
-              <span className="cap-tag">• Track Docket</span>
-              <span className="cap-tag">• Assigned Queue</span>
-            </div>
-            <button
-              type="button"
-              className="btn-enter-role-card btn-role-authority"
-              onClick={() => openLogin(ApplicationRole.AUTHORITY_OFFICER)}
-              aria-label="Enter Drainage Officer Workspace"
-            >
-              <span>ENTER DRAINAGE OFFICER WORKSPACE</span>
-              <ArrowRight size={14} />
-            </button>
-          </div>
-
-          {/* AUTHORITY OFFICER - ROADS */}
-          <div className="landing-role-card crosshair-corner" data-testid="role-card-authority-roads">
-            <div className="role-card-header">
-              <span className="role-card-index">03</span>
-              <span className="role-card-badge badge-authority">PWD & ROADS</span>
-            </div>
-            <h3 className="role-card-title">Roads Officer</h3>
-            <p className="role-card-desc">
-              Triage pothole and roadway hazard dockets, update maintenance resolutions, and advance status along verified pathways.
-            </p>
-            <div className="role-card-caps">
-              <span className="cap-tag">• Authority Console</span>
-              <span className="cap-tag">• Road Hazard Queue</span>
-              <span className="cap-tag">• Resolution Notes</span>
-            </div>
-            <button
-              type="button"
-              className="btn-enter-role-card btn-role-authority"
-              onClick={() => openLogin(ApplicationRole.AUTHORITY_OFFICER)}
-              aria-label="Enter Roads Officer Workspace"
-            >
-              <span>ENTER ROADS OFFICER WORKSPACE</span>
-              <ArrowRight size={14} />
-            </button>
-          </div>
-
-          {/* MUNICIPAL SUPERVISOR */}
-          <div className="landing-role-card crosshair-corner" data-testid="role-card-supervisor">
-            <div className="role-card-header">
-              <span className="role-card-index">04</span>
-              <span className="role-card-badge badge-supervisor">SUPERVISORY OVERSIGHT</span>
-            </div>
-            <h3 className="role-card-title">Municipal Supervisor</h3>
-            <p className="role-card-desc">
-              Oversee departmental operations, supervise case resolution workflows across all municipal queues, and inspect authorized audit events.
-            </p>
-            <div className="role-card-caps">
-              <span className="cap-tag">• Supervisor Overview</span>
-              <span className="cap-tag">• Department Queues</span>
-              <span className="cap-tag">• Audit Timeline</span>
-            </div>
-            <button
-              type="button"
-              className="btn-enter-role-card btn-role-supervisor"
-              onClick={() => openLogin(ApplicationRole.MUNICIPAL_SUPERVISOR)}
-              aria-label="Enter Municipal Supervisor Workspace"
-            >
-              <span>ENTER SUPERVISOR WORKSPACE</span>
-              <ArrowRight size={14} />
-            </button>
-          </div>
-
-          {/* ADMINISTRATOR */}
-          <div className="landing-role-card crosshair-corner" data-testid="role-card-admin">
-            <div className="role-card-header">
-              <span className="role-card-index">05</span>
-              <span className="role-card-badge badge-admin">CONTROL PLANE</span>
-            </div>
-            <h3 className="role-card-title">System Administrator</h3>
-            <p className="role-card-desc">
-              System-wide administrative visibility, multi-department monitoring, user directory access, and full append-only audit trail inspection.
-            </p>
-            <div className="role-card-caps">
-              <span className="cap-tag">• Admin Operations</span>
-              <span className="cap-tag">• User Registry</span>
-              <span className="cap-tag">• Full Audit Trail</span>
-            </div>
-            <button
-              type="button"
-              className="btn-enter-role-card btn-role-admin"
-              onClick={() => openLogin(ApplicationRole.ADMINISTRATOR)}
-              aria-label="Enter System Administrator Workspace"
-            >
-              <span>ENTER SYSTEM ADMINISTRATOR WORKSPACE</span>
-              <ArrowRight size={14} />
-            </button>
-          </div>
-
-          {/* PUBLIC TRACKING */}
-          <div className="landing-role-card crosshair-corner" data-testid="role-card-public">
-            <div className="role-card-header">
-              <span className="role-card-index">06</span>
-              <span className="role-card-badge badge-public">ANONYMOUS / PUBLIC</span>
-            </div>
-            <h3 className="role-card-title">Public Observer</h3>
-            <p className="role-card-desc">
-              Track public-safe civic docket progression without authority controls or private citizen personal information.
-            </p>
-            <div className="role-card-caps">
-              <span className="cap-tag">• Public Tracking</span>
-              <span className="cap-tag">• Lifecycle Journey</span>
-              <span className="cap-tag">• No Login Required</span>
-            </div>
-            <div className="public-card-actions">
+          <div className="landing-roles-grid single-card-grid">
+            <div className="landing-role-card crosshair-corner" data-testid="role-card-citizen">
+              <div className="role-card-header">
+                <span className="role-card-index">01</span>
+                <span className="role-card-badge badge-citizen">CITIZEN ACCESS</span>
+              </div>
+              <h3 className="role-card-title">Citizen Workspace</h3>
+              <p className="role-card-desc">
+                Report civic grievances in plain speech or text, generate structured action dockets, attach photographic proof, track progress, and review resolution evidence.
+              </p>
+              <div className="role-card-caps">
+                <span className="cap-tag">• Report Issue</span>
+                <span className="cap-tag">• Track Docket</span>
+                <span className="cap-tag">• Evidence Studio</span>
+                <span className="cap-tag">• Resolution Review (Accept/Reject)</span>
+              </div>
               <button
                 type="button"
-                className="btn-enter-role-card btn-role-public"
-                onClick={onExploreTrack}
-                aria-label="Continue as Public Observer"
+                className="btn-enter-role-card btn-role-citizen"
+                onClick={() => openLogin(ApplicationRole.CITIZEN)}
+                aria-label="Enter Citizen Workspace"
               >
-                <span>CONTINUE AS PUBLIC OBSERVER</span>
+                <span>ENTER CITIZEN WORKSPACE</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* DOMAIN 2: AUTHORITY WORKSPACE (EXACTLY 5 OPERATIONAL ROLES) */}
+        <div className="workspace-domain-block">
+          <div className="workspace-domain-label">
+            <span className="technical-label">DOMAIN 02 // AUTHORITY WORKSPACE (OPERATIONAL ROLES ONLY)</span>
+          </div>
+          <div className="landing-roles-grid authority-5roles-grid">
+            {/* 1. PWD */}
+            <div className="landing-role-card crosshair-corner" data-testid="role-card-authority-pwd">
+              <div className="role-card-header">
+                <span className="role-card-index">01</span>
+                <span className="role-card-badge badge-authority">PWD & INFRASTRUCTURE</span>
+              </div>
+              <h3 className="role-card-title">PWD</h3>
+              <p className="role-card-desc">
+                Public Works Department engineering triage, structural repairs, bridge maintenance, and public asset workflows.
+              </p>
+              <div className="role-card-caps">
+                <span className="cap-tag">• PWD Console</span>
+                <span className="cap-tag">• Structural Queue</span>
+                <span className="cap-tag">• PWD_ROADS Scope</span>
+              </div>
+              <button
+                type="button"
+                className="btn-enter-role-card btn-role-authority"
+                onClick={() => openLogin(ApplicationRole.AUTHORITY_OFFICER)}
+                aria-label="Enter PWD Officer Workspace"
+              >
+                <span>ENTER PWD WORKSPACE</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+
+            {/* 2. ROADS */}
+            <div className="landing-role-card crosshair-corner" data-testid="role-card-authority-roads">
+              <div className="role-card-header">
+                <span className="role-card-index">02</span>
+                <span className="role-card-badge badge-authority">ROADS & HIGHWAYS</span>
+              </div>
+              <h3 className="role-card-title">Roads</h3>
+              <p className="role-card-desc">
+                Triage pothole and roadway hazard dockets, update maintenance resolutions, and advance status along verified pathways.
+              </p>
+              <div className="role-card-caps">
+                <span className="cap-tag">• Roads Console</span>
+                <span className="cap-tag">• Hazard Triage</span>
+                <span className="cap-tag">• PWD_ROADS Scope</span>
+              </div>
+              <button
+                type="button"
+                className="btn-enter-role-card btn-role-authority"
+                onClick={() => openLogin(ApplicationRole.AUTHORITY_OFFICER)}
+                aria-label="Enter Roads Officer Workspace"
+              >
+                <span>ENTER ROADS WORKSPACE</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+
+            {/* 3. DRAINAGE */}
+            <div className="landing-role-card crosshair-corner" data-testid="role-card-authority-drainage">
+              <div className="role-card-header">
+                <span className="role-card-index">03</span>
+                <span className="role-card-badge badge-authority">DRAINAGE & SEWERAGE</span>
+              </div>
+              <h3 className="role-card-title">Drainage</h3>
+              <p className="role-card-desc">
+                Review assigned flood and drainage dockets, inspect coordinates, and execute authorized lifecycle status transitions under Cedar policy.
+              </p>
+              <div className="role-card-caps">
+                <span className="cap-tag">• Drainage Console</span>
+                <span className="cap-tag">• Silt Triage</span>
+                <span className="cap-tag">• DRAINAGE_STORMWATER Scope</span>
+              </div>
+              <button
+                type="button"
+                className="btn-enter-role-card btn-role-authority"
+                onClick={() => openLogin(ApplicationRole.AUTHORITY_OFFICER)}
+                aria-label="Enter Drainage Officer Workspace"
+              >
+                <span>ENTER DRAINAGE WORKSPACE</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+
+            {/* 4. STORMWATER */}
+            <div className="landing-role-card crosshair-corner" data-testid="role-card-authority-stormwater">
+              <div className="role-card-header">
+                <span className="role-card-index">04</span>
+                <span className="role-card-badge badge-authority">STORMWATER & FLOOD CONTROL</span>
+              </div>
+              <h3 className="role-card-title">Stormwater</h3>
+              <p className="role-card-desc">
+                Monsoon overflow containment, stormwater canal clearance, and flood mitigation triage under fail-closed Cedar policy.
+              </p>
+              <div className="role-card-caps">
+                <span className="cap-tag">• Stormwater Console</span>
+                <span className="cap-tag">• Flood Mitigation</span>
+                <span className="cap-tag">• DRAINAGE_STORMWATER Scope</span>
+              </div>
+              <button
+                type="button"
+                className="btn-enter-role-card btn-role-authority"
+                onClick={() => openLogin(ApplicationRole.AUTHORITY_OFFICER)}
+                aria-label="Enter Stormwater Officer Workspace"
+              >
+                <span>ENTER STORMWATER WORKSPACE</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+
+            {/* 5. MUNICIPAL SUPERVISOR */}
+            <div className="landing-role-card crosshair-corner" data-testid="role-card-supervisor">
+              <div className="role-card-header">
+                <span className="role-card-index">05</span>
+                <span className="role-card-badge badge-supervisor">SUPERVISORY OVERSIGHT</span>
+              </div>
+              <h3 className="role-card-title">Municipal Supervisor</h3>
+              <p className="role-card-desc">
+                Oversee departmental operations, supervise case resolution workflows across municipal queues, and inspect authorized audit events.
+              </p>
+              <div className="role-card-caps">
+                <span className="cap-tag">• Supervisor Overview</span>
+                <span className="cap-tag">• Department Queues</span>
+                <span className="cap-tag">• Audit Timeline</span>
+              </div>
+              <button
+                type="button"
+                className="btn-enter-role-card btn-role-supervisor"
+                onClick={() => openLogin(ApplicationRole.MUNICIPAL_SUPERVISOR)}
+                aria-label="Enter Municipal Supervisor Workspace"
+              >
+                <span>ENTER SUPERVISOR WORKSPACE</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* DOMAIN 3: PUBLIC TRACKING & DOMAIN 4: ADMINISTRATIVE CONTROL PLANE */}
+        <div className="workspace-secondary-domains">
+          {/* PUBLIC TRACKING */}
+          <div className="workspace-domain-block">
+            <div className="workspace-domain-label">
+              <span className="technical-label">DOMAIN 03 // PUBLIC TRACKING</span>
+            </div>
+            <div className="landing-role-card crosshair-corner" data-testid="role-card-public">
+              <div className="role-card-header">
+                <span className="role-card-index">01</span>
+                <span className="role-card-badge badge-public">ANONYMOUS / PUBLIC</span>
+              </div>
+              <h3 className="role-card-title">Public Observer</h3>
+              <p className="role-card-desc">
+                Track public-safe civic docket progression without authority controls or private citizen personal information.
+              </p>
+              <div className="role-card-caps">
+                <span className="cap-tag">• Public Tracking</span>
+                <span className="cap-tag">• Lifecycle Journey</span>
+                <span className="cap-tag">• No Login Required</span>
+              </div>
+              <div className="public-card-actions">
+                <button
+                  type="button"
+                  className="btn-enter-role-card btn-role-public"
+                  onClick={onExploreTrack}
+                  aria-label="Continue as Public Observer"
+                >
+                  <span>CONTINUE AS PUBLIC OBSERVER</span>
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ADMINISTRATIVE CONTROL PLANE */}
+          <div className="workspace-domain-block">
+            <div className="workspace-domain-label">
+              <span className="technical-label">DOMAIN 04 // ADMINISTRATIVE CONTROL PLANE (NOT AN AUTHORITY ROLE)</span>
+            </div>
+            <div className="landing-role-card crosshair-corner" data-testid="role-card-admin">
+              <div className="role-card-header">
+                <span className="role-card-index">01</span>
+                <span className="role-card-badge badge-admin">PLATFORM MANAGEMENT</span>
+              </div>
+              <h3 className="role-card-title">System Administrator</h3>
+              <p className="role-card-desc">
+                System-wide administrative visibility, multi-department monitoring, user directory access, and full append-only audit trail inspection.
+              </p>
+              <div className="role-card-caps">
+                <span className="cap-tag">• Admin Operations</span>
+                <span className="cap-tag">• User Registry</span>
+                <span className="cap-tag">• Full Audit Trail</span>
+              </div>
+              <button
+                type="button"
+                className="btn-enter-role-card btn-role-admin"
+                onClick={() => openLogin(ApplicationRole.ADMINISTRATOR)}
+                aria-label="Enter System Administrator Workspace"
+              >
+                <span>ENTER SYSTEM ADMINISTRATOR WORKSPACE</span>
                 <ArrowRight size={14} />
               </button>
             </div>

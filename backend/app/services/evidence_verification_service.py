@@ -66,6 +66,7 @@ class EvidenceVerificationService:
         content_type: str,
         evidence_type: EvidenceType = EvidenceType.CASE_EVIDENCE,
         resolution_attempt: Optional[str] = None,
+        resolution_message: Optional[str] = None,
     ) -> EvidenceResponse:
         """Execute complete evidence verification and persistence pipeline.
 
@@ -152,49 +153,162 @@ class EvidenceVerificationService:
         )
         case_store.add_evidence_uri(case_id, storage_meta.s3_uri)
 
-        # 6. Advisory AI Assessment
-        assessment = self.provider.assess(
-            case_id=case_id,
-            case_description=case.description,
-            department=case.department,
-            evidence_type=evidence_type,
-            filename=clean_filename,
-            content_type=validation_result.detected_content_type,
-            file_bytes=file_bytes,
-            resolution_attempt=resolution_attempt,
+        # 6. Advisory AI Assessment — non-blocking background thread.
+        # Evidence stores immediately with UNCERTAIN; AI updates the record when done.
+        # This prevents CPU-bound vision inference from blocking the HTTP response.
+        import threading
+
+        _is_image = (
+            validation_result.detected_content_type.startswith("image/")
+            or clean_filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
         )
 
-        # Verification outcome derivation:
-        # If deterministic validation passed, the outcome matches the assessment outcome.
-        verification_outcome = assessment.outcome
-        verification_reason = assessment.reason
-
-        # 7. Persist Structured Verification Record
+        # 7. Persist Structured Verification Record immediately with UNCERTAIN placeholder
         ver_record = EvidenceVerificationRecord(
             verification_id=verification_id,
             evidence_id=evidence_id,
             case_id=case_id,
             deterministic_validation_result=validation_result.status,
-            verification_status=verification_outcome,
-            verification_reason=verification_reason,
-            assessment_provider=assessment.provider_id,
-            assessment_model=assessment.model_id,
-            assessment_timestamp=assessment.timestamp,
-            ai_available=assessment.ai_available,
-            ai_confidence=assessment.confidence,
-            detected_characteristics=assessment.detected_characteristics,
+            verification_status=VerificationOutcome.UNCERTAIN,
+            verification_reason="AI assessment in progress; deterministic validation passed.",
+            assessment_provider="pending",
+            assessment_model=None,
+            assessment_timestamp=now,
+            ai_available=False,
+            ai_confidence=None,
+            detected_characteristics=["deterministic_validation_passed"],
+            relevance=None,
+            relevance_reason=None,
+            relevance_detected_features=[],
+            relevance_confidence=None,
             created_at=now,
         )
         evidence_repo.save_verification(ver_record)
+
+        # Background AI thread — captures locals by value
+        _provider = self.provider
+        _case_desc = case.description
+        _department = case.department
+        _detected_ct = validation_result.detected_content_type
+
+        def _run_ai_assessment() -> None:
+            try:
+                assessment = _provider.assess(
+                    case_id=case_id,
+                    case_description=_case_desc,
+                    department=_department,
+                    evidence_type=evidence_type,
+                    filename=clean_filename,
+                    content_type=_detected_ct,
+                    file_bytes=file_bytes,
+                    resolution_attempt=resolution_attempt,
+                )
+                rel_assessment = None
+                if evidence_type == EvidenceType.CASE_EVIDENCE and _is_image:
+                    from app.services.evidence.provider import (
+                        DeterministicFallbackProvider,
+                        MockEvidenceAssessmentProvider,
+                    )
+                    from app.models.evidence_relevance import (
+                        CitizenEvidenceAssessment,
+                        EvidenceRelevanceOutcome,
+                    )
+                    from app.services.evidence.vision_service import citizen_evidence_vision_service
+                    if citizen_evidence_vision_service._custom_caller is not None:
+                        rel_assessment = citizen_evidence_vision_service.assess_relevance(
+                            query=_case_desc or "",
+                            file_bytes=file_bytes,
+                            filename=clean_filename,
+                            content_type=_detected_ct,
+                        )
+                    elif isinstance(_provider, MockEvidenceAssessmentProvider):
+                        rel_assessment = CitizenEvidenceAssessment(
+                            relevance=(
+                                EvidenceRelevanceOutcome.RELATED
+                                if assessment.outcome in (VerificationOutcome.VERIFIED, VerificationOutcome.LIKELY_VERIFIED)
+                                else EvidenceRelevanceOutcome.UNCERTAIN
+                            ),
+                            confidence=assessment.confidence or 0.95,
+                            reason=assessment.reason,
+                            detected_features=assessment.detected_characteristics,
+                            model_id="mock-vision",
+                            timestamp=assessment.timestamp,
+                        )
+                    elif isinstance(_provider, DeterministicFallbackProvider):
+                        rel_assessment = CitizenEvidenceAssessment(
+                            relevance=EvidenceRelevanceOutcome.UNCERTAIN,
+                            confidence=None,
+                            reason=assessment.reason,
+                            detected_features=assessment.detected_characteristics,
+                            model_id="deterministic-fallback",
+                            timestamp=assessment.timestamp,
+                        )
+                    else:
+                        rel_assessment = citizen_evidence_vision_service.assess_relevance(
+                            query=_case_desc or "",
+                            file_bytes=file_bytes,
+                            filename=clean_filename,
+                            content_type=_detected_ct,
+                        )
+                ver_record.verification_status = assessment.outcome
+                ver_record.verification_reason = assessment.reason
+                ver_record.assessment_provider = assessment.provider_id
+                ver_record.assessment_model = assessment.model_id
+                ver_record.assessment_timestamp = assessment.timestamp
+                ver_record.ai_available = assessment.ai_available
+                ver_record.ai_confidence = assessment.confidence
+                ver_record.detected_characteristics = assessment.detected_characteristics
+                if rel_assessment:
+                    ver_record.relevance = rel_assessment.relevance
+                    ver_record.relevance_reason = rel_assessment.reason
+                    ver_record.relevance_detected_features = rel_assessment.detected_features
+                    ver_record.relevance_confidence = rel_assessment.confidence
+                evidence_repo.save_verification(ver_record)
+
+                # Update persisted EvidenceRecord
+                saved_rec = evidence_repo.get_evidence(case_id, evidence_id)
+                if saved_rec:
+                    saved_rec.verification_status = assessment.outcome
+                    saved_rec.verification_reason = assessment.reason
+                    saved_rec.ai_confidence = assessment.confidence
+                    if rel_assessment:
+                        saved_rec.relevance = rel_assessment.relevance
+                        saved_rec.relevance_reason = rel_assessment.reason
+                        saved_rec.relevance_detected_features = rel_assessment.detected_features
+                        saved_rec.relevance_confidence = rel_assessment.confidence
+                    evidence_repo.save_evidence(saved_rec)
+
+                logger.info(
+                    "Background AI assessment complete for evidence %s: %s",
+                    evidence_id, assessment.outcome.value,
+                )
+            except Exception as exc:
+                logger.warning("Background AI assessment failed for evidence %s: %s", evidence_id, exc)
+
+        ai_thread = threading.Thread(target=_run_ai_assessment, daemon=True)
+        ai_thread.start()
+        # Allow fast/mock providers to complete within 0.2s without blocking user experience for slow models
+        ai_thread.join(timeout=0.2)
 
         # 8. Persist Authoritative Evidence Record
         # Server derives uploader metadata from AuthenticatedPrincipal
         submitting_officer = principal.principal_id if evidence_type == EvidenceType.RESOLUTION_EVIDENCE else None
         officer_dept = principal.department if evidence_type == EvidenceType.RESOLUTION_EVIDENCE else None
         attempt_ref = resolution_attempt or f"attempt-{case.rejection_count + 1}" if evidence_type == EvidenceType.RESOLUTION_EVIDENCE else None
+        clean_msg = resolution_message.strip() if resolution_message and resolution_message.strip() else None
 
         if evidence_type == EvidenceType.RESOLUTION_EVIDENCE and attempt_ref:
-            case_store.set_active_resolution_attempt(case_id, attempt_ref)
+            case_store.set_active_resolution_attempt(
+                case_id=case_id,
+                attempt_id=attempt_ref,
+                resolution_message=clean_msg,
+            )
+            if clean_msg:
+                case_store.add_resolution_note(
+                    case_id=case_id,
+                    note=clean_msg,
+                    actor_label=principal.role.value,
+                )
 
         rec = EvidenceRecord(
             evidence_id=evidence_id,
@@ -209,11 +323,16 @@ class EvidenceVerificationService:
             s3_uri=storage_meta.s3_uri,
             sha256=validation_result.sha256,
             validation_status=validation_result.status,
-            verification_status=verification_outcome,
-            verification_reason=verification_reason,
-            ai_assessment=assessment.reason if assessment.ai_available else None,
-            ai_confidence=assessment.confidence,
+            verification_status=ver_record.verification_status,
+            verification_reason=ver_record.verification_reason,
+            ai_assessment=None,  # populated by background AI thread if still running
+            ai_confidence=ver_record.ai_confidence,
+            relevance=ver_record.relevance,
+            relevance_reason=ver_record.relevance_reason,
+            relevance_detected_features=ver_record.relevance_detected_features or [],
+            relevance_confidence=ver_record.relevance_confidence,
             resolution_attempt=attempt_ref,
+            resolution_message=clean_msg,
             submitting_authority_principal=submitting_officer,
             authority_department=officer_dept,
             created_at=now,
@@ -238,11 +357,13 @@ class EvidenceVerificationService:
                 "evidence_id": evidence_id,
                 "evidence_type": evidence_type.value,
                 "sha256": validation_result.sha256,
-                "size_bytes": validation_result.size_bytes,
-                "filename": clean_filename,
-                "verification_status": verification_outcome.value,
-                "verification_id": verification_id,
-                "ai_available": assessment.ai_available,
+                "validation_status": validation_result.status.value,
+                "verification_status": ver_record.verification_status.value,
+                "ai_available": False,
+                "ai_confidence": None,
+                "resolution_attempt": attempt_ref,
+                "resolution_message": clean_msg,
+                "is_advisory": True,
             },
         )
 
@@ -251,7 +372,7 @@ class EvidenceVerificationService:
             if evidence_type == EvidenceType.RESOLUTION_EVIDENCE:
                 # Notify citizen case owner that authority has uploaded resolution evidence
                 worker_dispatcher.dispatch_resolution_ready(
-                    case, proposed_notes=f"Resolution evidence '{clean_filename}' attached by {principal.principal_id}"
+                    case, proposed_notes=clean_msg or f"Resolution evidence '{clean_filename}' attached by {principal.principal_id}"
                 )
             else:
                 # Ordinary case evidence uploaded -> notify authority
@@ -272,7 +393,12 @@ class EvidenceVerificationService:
             verification_status=rec.verification_status,
             verification_reason=rec.verification_reason,
             ai_confidence=rec.ai_confidence,
+            relevance=rec.relevance,
+            relevance_reason=rec.relevance_reason,
+            relevance_detected_features=rec.relevance_detected_features,
+            relevance_confidence=rec.relevance_confidence,
             resolution_attempt=rec.resolution_attempt,
+            resolution_message=rec.resolution_message,
             object_key=rec.storage_key,
             s3_uri=rec.s3_uri,
             created_at=rec.created_at,
@@ -315,7 +441,12 @@ class EvidenceVerificationService:
                 verification_status=r.verification_status,
                 verification_reason=r.verification_reason,
                 ai_confidence=r.ai_confidence,
+                relevance=r.relevance,
+                relevance_reason=r.relevance_reason,
+                relevance_detected_features=r.relevance_detected_features,
+                relevance_confidence=r.relevance_confidence,
                 resolution_attempt=r.resolution_attempt,
+                resolution_message=r.resolution_message,
                 created_at=r.created_at,
                 verified_at=r.verified_at,
             )

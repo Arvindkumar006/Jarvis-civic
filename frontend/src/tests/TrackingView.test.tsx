@@ -1,13 +1,14 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TrackingView } from '../components/Tracking/TrackingView';
-import { trackingApi, casesApi, auditApi, ApiError } from '../services/api';
+import { trackingApi, casesApi, auditApi, evidenceApi, ApiError } from '../services/api';
 import {
   ApplicationRole,
   AuditEvent,
   CaseStatus,
   ControlledDepartment,
   PublicTrackingProjection,
+  VerificationOutcome,
 } from '../types/civic';
 import { WorkspaceProvider } from '../context/WorkspaceContext';
 
@@ -37,6 +38,13 @@ vi.mock('../services/api', () => {
       updateStatus: vi.fn(),
       addResolutionNote: vi.fn(),
       getHistory: vi.fn(),
+      acceptResolution: vi.fn(),
+      rejectResolution: vi.fn(),
+      requestCitizenConfirmation: vi.fn(),
+    },
+    evidenceApi: {
+      uploadEvidence: vi.fn(),
+      listEvidence: vi.fn(() => Promise.resolve([])),
     },
     auditApi: {
       getCaseAuditTrail: vi.fn(),
@@ -313,6 +321,461 @@ describe('TrackingView', () => {
       expect(screen.getAllByText('DOCKET_CREATED').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('STATUS_TRANSITION')).toBeInTheDocument();
       expect(screen.getByText('Drainage team inspection scheduled')).toBeInTheDocument();
+    });
+  });
+
+  describe('Phase 8.8 Citizen Closure Gate & Confirmation Request Workflow', () => {
+    const underReviewProjection: PublicTrackingProjection = {
+      case_id: 'NS-DRA-2026-X9Y2',
+      status: 'UNDER_REVIEW',
+      recommended_department: 'DRAINAGE_STORMWATER',
+      created_at: '2026-09-17T10:00:00Z',
+      updated_at: '2026-09-17T10:15:00Z',
+    };
+
+    it('shows RESOLUTION EVIDENCE REQUIRED and [ ADD RESOLUTION EVIDENCE ] in Authority Workflow when status is UNDER_REVIEW and no evidence exists', async () => {
+      vi.mocked(trackingApi.getTracking).mockResolvedValueOnce(underReviewProjection);
+      vi.mocked(casesApi.getCase).mockResolvedValueOnce({
+        case_id: 'NS-DRA-2026-X9Y2',
+        owner_id: 'cit-user-1',
+        department: 'DRAINAGE_STORMWATER',
+        status: CaseStatus.UNDER_REVIEW,
+        description: 'Severe street waterlogging',
+        location: 'Anna Salai',
+        is_public: true,
+        evidence_uris: [],
+        resolution_notes: [],
+        confirmation_requested: false,
+        created_at: '2026-09-17T10:00:00Z',
+        updated_at: '2026-09-17T10:15:00Z',
+      });
+      vi.mocked(evidenceApi.listEvidence).mockResolvedValueOnce([]);
+
+      renderWithWorkspace(
+        <TrackingView />,
+        ApplicationRole.AUTHORITY_OFFICER,
+        ControlledDepartment.DRAINAGE_STORMWATER,
+        'officer-drainage-1'
+      );
+
+      const input = screen.getByPlaceholderText(/Enter Case ID/i);
+      fireEvent.change(input, { target: { value: 'NS-DRA-2026-X9Y2' } });
+      fireEvent.click(screen.getByRole('button', { name: /Track Docket/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('NS-DRA-2026-X9Y2')).toBeInTheDocument();
+      });
+
+      // Switch to Authority Workflow tab
+      fireEvent.click(screen.getByRole('tab', { name: /2\. AUTHORITY WORKFLOW/i }));
+
+      expect(screen.getByText('RESOLUTION EVIDENCE REQUIRED')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /ADD RESOLUTION EVIDENCE/i })).toBeInTheDocument();
+    });
+
+    it('shows RESOLUTION EVIDENCE SUBMITTED, authoritative message, and [ REQUEST CITIZEN CONFIRMATION ] button for authority officer when valid evidence exists', async () => {
+      vi.mocked(trackingApi.getTracking).mockResolvedValueOnce(underReviewProjection);
+      vi.mocked(casesApi.getCase).mockResolvedValueOnce({
+        case_id: 'NS-DRA-2026-X9Y2',
+        owner_id: 'cit-user-1',
+        department: 'DRAINAGE_STORMWATER',
+        status: CaseStatus.UNDER_REVIEW,
+        description: 'Severe street waterlogging',
+        location: 'Anna Salai',
+        is_public: true,
+        evidence_uris: ['s3://bucket/drain_repair.jpg'],
+        resolution_notes: [],
+        active_resolution_attempt: 'att-1',
+        resolution_message: 'Desilted drain and cleared blocked culvert on 2026-09-20.',
+        confirmation_requested: false,
+        created_at: '2026-09-17T10:00:00Z',
+        updated_at: '2026-09-20T10:00:00Z',
+      });
+      vi.mocked(evidenceApi.listEvidence).mockResolvedValueOnce([
+        {
+          evidence_id: 'ev-res-1',
+          case_id: 'NS-DRA-2026-X9Y2',
+          filename: 'drain_repair.jpg',
+          size_bytes: 124000,
+          content_type: 'image/jpeg',
+          sha256_hash: 'abc123hash',
+          validation_status: 'VALID',
+          verification_status: VerificationOutcome.VERIFIED,
+          ai_confidence: 0.95,
+          evidence_type: 'RESOLUTION_EVIDENCE' as any,
+          resolution_attempt: 'att-1',
+          resolution_message: 'Desilted drain and cleared blocked culvert on 2026-09-20.',
+          uploaded_by_role: 'AUTHORITY_OFFICER',
+          uploaded_by_principal: 'officer-drainage-1',
+          uploaded_by_department: 'DRAINAGE_STORMWATER',
+          created_at: '2026-09-20T10:00:00Z',
+        },
+      ]);
+      vi.mocked(casesApi.requestCitizenConfirmation).mockResolvedValueOnce({
+        case_id: 'NS-DRA-2026-X9Y2',
+        owner_id: 'cit-user-1',
+        department: 'DRAINAGE_STORMWATER',
+        status: CaseStatus.UNDER_REVIEW,
+        description: 'Severe street waterlogging',
+        location: 'Anna Salai',
+        is_public: true,
+        evidence_uris: ['s3://bucket/drain_repair.jpg'],
+        resolution_notes: [],
+        active_resolution_attempt: 'att-1',
+        resolution_message: 'Desilted drain and cleared blocked culvert on 2026-09-20.',
+        confirmation_requested: true,
+        confirmation_requested_at: '2026-09-20T10:05:00Z',
+        created_at: '2026-09-17T10:00:00Z',
+        updated_at: '2026-09-20T10:05:00Z',
+      });
+
+      renderWithWorkspace(
+        <TrackingView />,
+        ApplicationRole.AUTHORITY_OFFICER,
+        ControlledDepartment.DRAINAGE_STORMWATER,
+        'officer-drainage-1'
+      );
+
+      const input = screen.getByPlaceholderText(/Enter Case ID/i);
+      fireEvent.change(input, { target: { value: 'NS-DRA-2026-X9Y2' } });
+      fireEvent.click(screen.getByRole('button', { name: /Track Docket/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('NS-DRA-2026-X9Y2')).toBeInTheDocument();
+      });
+
+      // Switch to Authority Workflow tab
+      fireEvent.click(screen.getByRole('tab', { name: /2\. AUTHORITY WORKFLOW/i }));
+
+      expect(screen.getByText('RESOLUTION EVIDENCE SUBMITTED')).toBeInTheDocument();
+      expect(screen.getByText(/"Desilted drain and cleared blocked culvert on 2026-09-20\."/i)).toBeInTheDocument();
+
+      const requestBtn = screen.getByRole('button', { name: /REQUEST CITIZEN CONFIRMATION/i });
+      expect(requestBtn).toBeInTheDocument();
+
+      fireEvent.click(requestBtn);
+
+      await waitFor(() => {
+        expect(casesApi.requestCitizenConfirmation).toHaveBeenCalledWith(
+          'NS-DRA-2026-X9Y2',
+          { resolution_message: 'Desilted drain and cleared blocked culvert on 2026-09-20.' },
+          ApplicationRole.AUTHORITY_OFFICER,
+          'officer-drainage-1',
+          ControlledDepartment.DRAINAGE_STORMWATER
+        );
+        expect(screen.getByText(/Citizen confirmation requested!/i)).toBeInTheDocument();
+      });
+    });
+
+    it('prohibits Administrator from operational confirmation authority in Authority Workflow', async () => {
+      vi.mocked(trackingApi.getTracking).mockResolvedValueOnce(underReviewProjection);
+      vi.mocked(casesApi.getCase).mockResolvedValueOnce({
+        case_id: 'NS-DRA-2026-X9Y2',
+        owner_id: 'cit-user-1',
+        department: 'DRAINAGE_STORMWATER',
+        status: CaseStatus.UNDER_REVIEW,
+        description: 'Severe street waterlogging',
+        location: 'Anna Salai',
+        is_public: true,
+        evidence_uris: ['s3://bucket/drain_repair.jpg'],
+        resolution_notes: [],
+        active_resolution_attempt: 'att-1',
+        resolution_message: 'Desilted drain and cleared blocked culvert on 2026-09-20.',
+        confirmation_requested: false,
+        created_at: '2026-09-17T10:00:00Z',
+        updated_at: '2026-09-20T10:00:00Z',
+      });
+      vi.mocked(evidenceApi.listEvidence).mockResolvedValueOnce([
+        {
+          evidence_id: 'ev-res-1',
+          case_id: 'NS-DRA-2026-X9Y2',
+          filename: 'drain_repair.jpg',
+          size_bytes: 124000,
+          content_type: 'image/jpeg',
+          sha256_hash: 'abc123hash',
+          validation_status: 'VALID',
+          verification_status: VerificationOutcome.VERIFIED,
+          ai_confidence: 0.95,
+          evidence_type: 'RESOLUTION_EVIDENCE' as any,
+          resolution_attempt: 'att-1',
+          resolution_message: 'Desilted drain and cleared blocked culvert on 2026-09-20.',
+          uploaded_by_role: 'AUTHORITY_OFFICER',
+          uploaded_by_principal: 'officer-drainage-1',
+          uploaded_by_department: 'DRAINAGE_STORMWATER',
+          created_at: '2026-09-20T10:00:00Z',
+        },
+      ]);
+
+      renderWithWorkspace(
+        <TrackingView />,
+        ApplicationRole.ADMINISTRATOR,
+        undefined,
+        'admin-sys-1'
+      );
+
+      const input = screen.getByPlaceholderText(/Enter Case ID/i);
+      fireEvent.change(input, { target: { value: 'NS-DRA-2026-X9Y2' } });
+      fireEvent.click(screen.getByRole('button', { name: /Track Docket/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('NS-DRA-2026-X9Y2')).toBeInTheDocument();
+      });
+
+      // Switch to Authority Workflow tab
+      fireEvent.click(screen.getByRole('tab', { name: /2\. AUTHORITY WORKFLOW/i }));
+
+      // Administrator should NOT see clickable request confirmation button
+      expect(screen.queryByRole('button', { name: /REQUEST CITIZEN CONFIRMATION/i })).not.toBeInTheDocument();
+      expect(screen.getByText(/Administrator account: Platform control only/i)).toBeInTheDocument();
+    });
+
+    it('displays Evidence, Authoritative Resolution Message, and [ ACCEPT RESOLUTION ] / [ REJECT RESOLUTION ] to citizen case owner when confirmation_requested is true', async () => {
+      vi.mocked(trackingApi.getTracking).mockResolvedValueOnce(underReviewProjection);
+      vi.mocked(casesApi.getCase).mockResolvedValueOnce({
+        case_id: 'NS-DRA-2026-X9Y2',
+        owner_id: 'cit-user-1',
+        department: 'DRAINAGE_STORMWATER',
+        status: CaseStatus.UNDER_REVIEW,
+        description: 'Severe street waterlogging',
+        location: 'Anna Salai',
+        is_public: true,
+        evidence_uris: ['s3://bucket/drain_repair.jpg'],
+        resolution_notes: [],
+        active_resolution_attempt: 'att-1',
+        resolution_message: 'Desilted drain and cleared blocked culvert on 2026-09-20.',
+        confirmation_requested: true,
+        confirmation_requested_at: '2026-09-20T10:05:00Z',
+        created_at: '2026-09-17T10:00:00Z',
+        updated_at: '2026-09-20T10:05:00Z',
+      });
+      vi.mocked(evidenceApi.listEvidence).mockResolvedValueOnce([
+        {
+          evidence_id: 'ev-res-1',
+          case_id: 'NS-DRA-2026-X9Y2',
+          filename: 'drain_repair.jpg',
+          size_bytes: 124000,
+          content_type: 'image/jpeg',
+          sha256_hash: 'abc123hash',
+          validation_status: 'VALID',
+          verification_status: VerificationOutcome.VERIFIED,
+          ai_confidence: 0.95,
+          evidence_type: 'RESOLUTION_EVIDENCE' as any,
+          resolution_attempt: 'att-1',
+          resolution_message: 'Desilted drain and cleared blocked culvert on 2026-09-20.',
+          uploaded_by_role: 'AUTHORITY_OFFICER',
+          uploaded_by_principal: 'officer-drainage-1',
+          uploaded_by_department: 'DRAINAGE_STORMWATER',
+          created_at: '2026-09-20T10:00:00Z',
+        },
+      ]);
+
+      renderWithWorkspace(
+        <TrackingView />,
+        ApplicationRole.CITIZEN,
+        undefined,
+        'cit-user-1'
+      );
+
+      const input = screen.getByPlaceholderText(/Enter Case ID/i);
+      fireEvent.change(input, { target: { value: 'NS-DRA-2026-X9Y2' } });
+      fireEvent.click(screen.getByRole('button', { name: /Track Docket/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('NS-DRA-2026-X9Y2')).toBeInTheDocument();
+        expect(screen.getByText('CITIZEN CONFIRMATION AWAITING // CLOSURE GATE')).toBeInTheDocument();
+        expect(screen.getByText('drain_repair.jpg')).toBeInTheDocument();
+        expect(screen.getByText(/"Desilted drain and cleared blocked culvert on 2026-09-20\."/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /ACCEPT RESOLUTION/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^REJECT RESOLUTION$/i })).toBeInTheDocument();
+      });
+    });
+
+    it('resets confirmation UI, removes accept/reject controls, and displays RESOLVED when citizen accepts resolution', async () => {
+      vi.mocked(trackingApi.getTracking).mockResolvedValue(underReviewProjection);
+      const underReviewCase = {
+        case_id: 'NS-DRA-2026-X9Y2',
+        owner_id: 'cit-user-1',
+        department: 'DRAINAGE_STORMWATER',
+        status: CaseStatus.UNDER_REVIEW,
+        description: 'Severe street waterlogging',
+        location: 'Anna Salai',
+        is_public: true,
+        evidence_uris: ['s3://bucket/drain_repair.jpg'],
+        resolution_notes: [],
+        active_resolution_attempt: 'att-1',
+        resolution_message: 'Desilted drain and cleared blocked culvert on 2026-09-20.',
+        confirmation_requested: true,
+        confirmation_requested_at: '2026-09-20T10:05:00Z',
+        created_at: '2026-09-17T10:00:00Z',
+        updated_at: '2026-09-20T10:05:00Z',
+      };
+      const resolvedCase = {
+        ...underReviewCase,
+        status: CaseStatus.RESOLVED,
+        resolution_confirmed: true,
+        resolution_confirmed_at: '2026-09-20T10:10:00Z',
+        confirmation_requested: false,
+        updated_at: '2026-09-20T10:10:00Z',
+      };
+
+      let currentCase: any = underReviewCase;
+      vi.mocked(casesApi.getCase).mockImplementation(async () => currentCase);
+      vi.mocked(casesApi.acceptResolution).mockImplementation(async () => {
+        currentCase = resolvedCase;
+        return resolvedCase;
+      });
+
+      vi.mocked(evidenceApi.listEvidence).mockResolvedValue([
+        {
+          evidence_id: 'ev-res-1',
+          case_id: 'NS-DRA-2026-X9Y2',
+          filename: 'drain_repair.jpg',
+          size_bytes: 124000,
+          content_type: 'image/jpeg',
+          sha256_hash: 'abc123hash',
+          validation_status: 'VALID',
+          verification_status: VerificationOutcome.VERIFIED,
+          ai_confidence: 0.95,
+          evidence_type: 'RESOLUTION_EVIDENCE' as any,
+          resolution_attempt: 'att-1',
+          resolution_message: 'Desilted drain and cleared blocked culvert on 2026-09-20.',
+          uploaded_by_role: 'AUTHORITY_OFFICER',
+          uploaded_by_principal: 'officer-drainage-1',
+          uploaded_by_department: 'DRAINAGE_STORMWATER',
+          created_at: '2026-09-20T10:00:00Z',
+        },
+      ]);
+
+      renderWithWorkspace(
+        <TrackingView />,
+        ApplicationRole.CITIZEN,
+        undefined,
+        'cit-user-1'
+      );
+
+      const input = screen.getByPlaceholderText(/Enter Case ID/i);
+      fireEvent.change(input, { target: { value: 'NS-DRA-2026-X9Y2' } });
+      fireEvent.click(screen.getByRole('button', { name: /Track Docket/i }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /ACCEPT RESOLUTION/i })).toBeInTheDocument();
+      });
+
+      // Click Accept button to open dialog
+      fireEvent.click(screen.getByRole('button', { name: /ACCEPT RESOLUTION/i }));
+
+      expect(screen.getByText(/Confirm Citizen Resolution & Close Case/i)).toBeInTheDocument();
+
+      // Confirm in dialog
+      fireEvent.click(screen.getByRole('button', { name: /CONFIRM RESOLUTION & CLOSE/i }));
+
+      await waitFor(() => {
+        expect(casesApi.acceptResolution).toHaveBeenCalledWith('NS-DRA-2026-X9Y2', { feedback: undefined });
+        expect(screen.getByText(/Resolution confirmed! Civic docket is now RESOLVED and closed/i)).toBeInTheDocument();
+        expect(screen.getByText(/CITIZEN RESOLUTION CONFIRMED/i)).toBeInTheDocument();
+        expect(screen.getByText(/Resolution Confirmed by Citizen/i)).toBeInTheDocument();
+        // Verify ACCEPT and REJECT buttons are removed from UI
+        expect(screen.queryByRole('button', { name: /ACCEPT RESOLUTION/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^REJECT RESOLUTION$/i })).not.toBeInTheDocument();
+      });
+    });
+
+    it('maintains UNDER_REVIEW and displays RESOLUTION REWORK REQUIRED when citizen rejects resolution', async () => {
+      vi.mocked(trackingApi.getTracking).mockResolvedValue(underReviewProjection);
+      const underReviewCase = {
+        case_id: 'NS-DRA-2026-X9Y2',
+        owner_id: 'cit-user-1',
+        department: 'DRAINAGE_STORMWATER',
+        status: CaseStatus.UNDER_REVIEW,
+        description: 'Severe street waterlogging',
+        location: 'Anna Salai',
+        is_public: true,
+        evidence_uris: ['s3://bucket/drain_repair.jpg'],
+        resolution_notes: [],
+        active_resolution_attempt: 'att-1',
+        resolution_message: 'Desilted drain and cleared blocked culvert on 2026-09-20.',
+        confirmation_requested: true,
+        confirmation_requested_at: '2026-09-20T10:05:00Z',
+        created_at: '2026-09-17T10:00:00Z',
+        updated_at: '2026-09-20T10:05:00Z',
+      };
+      const rejectedCase = {
+        ...underReviewCase,
+        status: CaseStatus.UNDER_REVIEW,
+        resolution_confirmed: false,
+        resolution_rejected_at: '2026-09-20T10:15:00Z',
+        confirmation_requested: false,
+        rejection_count: 1,
+        citizen_feedback: 'Water is still standing near the gate.',
+        updated_at: '2026-09-20T10:15:00Z',
+      };
+
+      let currentCase: any = underReviewCase;
+      vi.mocked(casesApi.getCase).mockImplementation(async () => currentCase);
+      vi.mocked(casesApi.rejectResolution).mockImplementation(async () => {
+        currentCase = rejectedCase;
+        return rejectedCase;
+      });
+
+      vi.mocked(evidenceApi.listEvidence).mockResolvedValue([
+        {
+          evidence_id: 'ev-res-1',
+          case_id: 'NS-DRA-2026-X9Y2',
+          filename: 'drain_repair.jpg',
+          size_bytes: 124000,
+          content_type: 'image/jpeg',
+          sha256_hash: 'abc123hash',
+          validation_status: 'VALID',
+          verification_status: VerificationOutcome.VERIFIED,
+          ai_confidence: 0.95,
+          evidence_type: 'RESOLUTION_EVIDENCE' as any,
+          resolution_attempt: 'att-1',
+          resolution_message: 'Desilted drain and cleared blocked culvert on 2026-09-20.',
+          uploaded_by_role: 'AUTHORITY_OFFICER',
+          uploaded_by_principal: 'officer-drainage-1',
+          uploaded_by_department: 'DRAINAGE_STORMWATER',
+          created_at: '2026-09-20T10:00:00Z',
+        },
+      ]);
+
+      renderWithWorkspace(
+        <TrackingView />,
+        ApplicationRole.CITIZEN,
+        undefined,
+        'cit-user-1'
+      );
+
+      const input = screen.getByPlaceholderText(/Enter Case ID/i);
+      fireEvent.change(input, { target: { value: 'NS-DRA-2026-X9Y2' } });
+      fireEvent.click(screen.getByRole('button', { name: /Track Docket/i }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /^REJECT RESOLUTION$/i })).toBeInTheDocument();
+      });
+
+      // Click Reject button on card to open dialog
+      fireEvent.click(screen.getByRole('button', { name: /^REJECT RESOLUTION$/i }));
+
+      expect(screen.getByText(/Reject Resolution & Request Rework/i)).toBeInTheDocument();
+
+      // Enter substantive reason
+      const reasonInput = screen.getByPlaceholderText(/Explain why the resolution is incomplete/i);
+      fireEvent.change(reasonInput, { target: { value: 'Water is still standing near the gate.' } });
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /CONFIRM REJECTION & REQUEST REWORK/i })).not.toBeDisabled();
+      });
+
+      // Click submit rejection
+      fireEvent.click(screen.getByRole('button', { name: /CONFIRM REJECTION & REQUEST REWORK/i }));
+
+      await waitFor(() => {
+        expect(casesApi.rejectResolution).toHaveBeenCalledWith('NS-DRA-2026-X9Y2', {
+          reason: 'Water is still standing near the gate.',
+        });
+        expect(screen.getByText(/Resolution rejected\. The case remains in UNDER_REVIEW for municipal rework\./i)).toBeInTheDocument();
+        expect(screen.getByText(/RESOLUTION REWORK REQUIRED/i)).toBeInTheDocument();
+      });
     });
   });
 });

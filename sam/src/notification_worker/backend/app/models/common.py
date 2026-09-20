@@ -36,6 +36,9 @@ class ConversationRequest(BaseModel):
     session_id: str = Field(..., description="Unique session tracking identifier")
     message: str = Field(..., min_length=1, description="Citizen problem statement or voice transcript")
     language: Optional[str] = Field(default="en", description="Language hint or detected dialect")
+    previous_state: Optional[CanonicalCivicState] = Field(default=None, description="Previous conversation canonical state context")
+    missing_fields: Optional[list[str]] = Field(default=None, description="Prior unresolved fields needing clarification")
+
 
 
 class ConversationResponse(BaseModel):

@@ -25,12 +25,12 @@ DEPARTMENT_ROUTING_MAP = {
     CivicIntent.WATERLOGGING.value: ControlledDepartment.DRAINAGE_STORMWATER.value,
     CivicIntent.DRAINAGE_BLOCKAGE.value: ControlledDepartment.DRAINAGE_STORMWATER.value,
     CivicIntent.ROAD_POTHOLE.value: ControlledDepartment.PWD_ROADS.value,
-    CivicIntent.STREETLIGHT_OUTAGE.value: ControlledDepartment.MUNICIPAL_CORPORATION.value,
-    CivicIntent.GARBAGE_ACCUMULATION.value: ControlledDepartment.WASTE_MANAGEMENT.value,
-    CivicIntent.WATER_SUPPLY_ISSUE.value: ControlledDepartment.WATER_SUPPLY.value,
-    CivicIntent.ELECTRICITY_OUTAGE.value: ControlledDepartment.ELECTRICITY_UTILITY.value,
-    CivicIntent.PUBLIC_INFRASTRUCTURE_DAMAGE.value: ControlledDepartment.MUNICIPAL_CORPORATION.value,
-    CivicIntent.OTHER_CIVIC_ISSUE.value: ControlledDepartment.OTHER_MANUAL_REVIEW.value,
+    CivicIntent.STREETLIGHT_OUTAGE.value: ControlledDepartment.PWD_ROADS.value,
+    CivicIntent.GARBAGE_ACCUMULATION.value: ControlledDepartment.PWD_ROADS.value,
+    CivicIntent.WATER_SUPPLY_ISSUE.value: ControlledDepartment.DRAINAGE_STORMWATER.value,
+    CivicIntent.ELECTRICITY_OUTAGE.value: ControlledDepartment.PWD_ROADS.value,
+    CivicIntent.PUBLIC_INFRASTRUCTURE_DAMAGE.value: ControlledDepartment.PWD_ROADS.value,
+    CivicIntent.OTHER_CIVIC_ISSUE.value: ControlledDepartment.PWD_ROADS.value,
 }
 
 
@@ -45,7 +45,7 @@ def validate_pincode_tool(pincode: str) -> bool:
 @tool
 def map_department_tool(intent: str) -> str:
     """Map a recognized civic intent to the recommended municipal department."""
-    return DEPARTMENT_ROUTING_MAP.get(intent, ControlledDepartment.OTHER_MANUAL_REVIEW.value)
+    return DEPARTMENT_ROUTING_MAP.get(intent, ControlledDepartment.PWD_ROADS.value)
 
 
 @tool

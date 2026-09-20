@@ -52,7 +52,8 @@ permit(
         JarvisCivic::Action::"add_resolution_note",
         JarvisCivic::Action::"add_evidence",
         JarvisCivic::Action::"add_resolution_evidence",
-        JarvisCivic::Action::"read_evidence"
+        JarvisCivic::Action::"read_evidence",
+        JarvisCivic::Action::"request_citizen_confirmation"
     ],
     resource
 )
@@ -71,7 +72,8 @@ permit(
         JarvisCivic::Action::"add_resolution_note",
         JarvisCivic::Action::"add_evidence",
         JarvisCivic::Action::"add_resolution_evidence",
-        JarvisCivic::Action::"read_evidence"
+        JarvisCivic::Action::"read_evidence",
+        JarvisCivic::Action::"request_citizen_confirmation"
     ],
     resource
 )
@@ -91,7 +93,8 @@ when {
 
 // POLICY F — Administrator Universal Management
 // Administrators may perform defined civic operations and audit inspections,
-// but CANNOT accept or reject resolutions on behalf of citizens.
+// but CANNOT accept or reject resolutions on behalf of citizens,
+// and CANNOT request citizen confirmation (operational role only).
 @id("policy_administrator_all")
 permit(
     principal is JarvisCivic::Administrator,
@@ -101,7 +104,8 @@ permit(
 unless {
     action in [
         JarvisCivic::Action::"accept_resolution",
-        JarvisCivic::Action::"reject_resolution"
+        JarvisCivic::Action::"reject_resolution",
+        JarvisCivic::Action::"request_citizen_confirmation"
     ]
 };
 

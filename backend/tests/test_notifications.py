@@ -259,17 +259,25 @@ def test_e_f_recipient_resolution_hierarchy(sample_case):
     assert roads_auth.email == "roads.officer@jarviscivic.local"
     assert roads_auth.role == ApplicationRole.AUTHORITY_OFFICER
 
-    # 4. Fallback to supervisor: if officer removed, resolves supervisor
-    # Temporarily deactivate drainage officer
-    officer_acc = account_repository.get_by_email("officer@jarviscivic.local")
-    officer_acc.is_active = False
-    account_repository.save_account(officer_acc)
+    # 4. Fallback to supervisor: if all officers for department removed, resolves supervisor
+    deactivated = []
+    for email in ["officer@jarviscivic.local", "drainage.officer@jarviscivic.local", "stormwater.officer@jarviscivic.local"]:
+        acc = account_repository.get_by_email(email)
+        if acc and acc.is_active:
+            acc.is_active = False
+            account_repository.save_account(acc)
+            deactivated.append(acc)
 
-    sup_auth = resolver.resolve_authority_recipient(sample_case)
-    assert sup_auth is not None
-    assert sup_auth.email == "supervisor@jarviscivic.local"
-    assert sup_auth.role == ApplicationRole.MUNICIPAL_SUPERVISOR
-    assert sup_auth.is_specific_officer is False
+    try:
+        sup_auth = resolver.resolve_authority_recipient(sample_case)
+        assert sup_auth is not None
+        assert sup_auth.email == "supervisor@jarviscivic.local"
+        assert sup_auth.role == ApplicationRole.MUNICIPAL_SUPERVISOR
+        assert sup_auth.is_specific_officer is False
+    finally:
+        for acc in deactivated:
+            acc.is_active = True
+            account_repository.save_account(acc)
 
 
 # ---------------------------------------------------------------------------

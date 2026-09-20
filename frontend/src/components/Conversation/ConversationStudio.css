@@ -709,6 +709,28 @@
   box-shadow: 0 0 10px var(--civic-emerald);
 }
 
+.btn-send-voice {
+  background: var(--civic-emerald);
+  color: #05080e;
+  border: none;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.45rem 0.85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.15s ease;
+  box-shadow: 0 0 8px rgba(0, 230, 153, 0.4);
+}
+
+.btn-send-voice:hover {
+  background: var(--civic-cyan);
+  box-shadow: 0 0 12px var(--civic-cyan);
+}
+
 .btn-stop-record {
   background: var(--civic-rose);
   color: #ffffff;
@@ -860,8 +882,192 @@
   100% { box-shadow: 0 0 0 0 rgba(255, 59, 92, 0); }
 }
 
+/* ==========================================================================
+   PHASE 8.9 — IMAGE ATTACHMENT & VISION AI RELEVANCE
+   ========================================================================== */
+
+/* Paperclip attach button */
+.btn-composer-attach {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.btn-composer-attach:hover:not(:disabled) {
+  color: var(--civic-cyan);
+  border-color: var(--civic-cyan);
+  background: rgba(0, 220, 255, 0.08);
+}
+
+.btn-composer-attach.active {
+  color: var(--civic-cyan);
+  border-color: var(--civic-cyan);
+  background: rgba(0, 220, 255, 0.12);
+  box-shadow: 0 0 8px rgba(0, 220, 255, 0.2);
+}
+
+.btn-composer-attach:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Image Preview Strip (above composer) */
+.composer-image-preview-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  background: var(--bg-surface-2);
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  animation: fadeIn 0.18s ease;
+}
+
+.preview-strip-thumb {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-medium);
+  flex-shrink: 0;
+}
+
+.preview-strip-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.preview-strip-filename {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-strip-hint {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--civic-cyan);
+  opacity: 0.8;
+  letter-spacing: 0.02em;
+}
+
+.btn-preview-strip-remove {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-preview-strip-remove:hover {
+  color: var(--civic-rose);
+  border-color: var(--civic-rose);
+}
+
+/* Attached image inside citizen bubble */
+.citizen-image-attachment {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.attachment-thumb {
+  width: 100%;
+  max-width: 220px;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: var(--radius-xs);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: block;
+}
+
+.attachment-filename {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+/* Vision AI Relevance Badge */
+.relevance-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  padding: 0.28rem 0.6rem;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+  cursor: default;
+  user-select: none;
+}
+
+.relevance-badge.relevance-related {
+  background: rgba(0, 230, 118, 0.1);
+  border-color: rgba(0, 230, 118, 0.3);
+  color: #00e676;
+}
+
+.relevance-badge.relevance-not-related {
+  background: rgba(255, 59, 92, 0.1);
+  border-color: rgba(255, 59, 92, 0.3);
+  color: var(--civic-rose);
+}
+
+.relevance-badge.relevance-uncertain {
+  background: rgba(255, 196, 0, 0.1);
+  border-color: rgba(255, 196, 0, 0.3);
+  color: #ffc400;
+}
+
+.relevance-badge-label {
+  white-space: nowrap;
+}
+
+.relevance-offline-tag {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
 @media (max-width: 768px) {
   .civic-conversation-studio {
     height: 520px;
   }
 }
+

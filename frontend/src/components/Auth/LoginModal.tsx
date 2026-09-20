@@ -34,11 +34,11 @@ const DEV_ACCOUNTS: QuickAccountChip[] = [
     badge: 'CITIZEN',
   },
   {
-    label: 'Drainage Officer',
+    label: 'PWD Officer',
     role: ApplicationRole.AUTHORITY_OFFICER,
-    email: 'officer@jarviscivic.local',
+    email: 'pwd.officer@jarviscivic.local',
     badge: 'AUTHORITY',
-    dept: 'DRAINAGE_STORMWATER',
+    dept: 'PWD_ROADS',
   },
   {
     label: 'Roads Officer',
@@ -46,6 +46,20 @@ const DEV_ACCOUNTS: QuickAccountChip[] = [
     email: 'roads.officer@jarviscivic.local',
     badge: 'AUTHORITY',
     dept: 'PWD_ROADS',
+  },
+  {
+    label: 'Drainage Officer',
+    role: ApplicationRole.AUTHORITY_OFFICER,
+    email: 'officer@jarviscivic.local',
+    badge: 'AUTHORITY',
+    dept: 'DRAINAGE_STORMWATER',
+  },
+  {
+    label: 'Stormwater Officer',
+    role: ApplicationRole.AUTHORITY_OFFICER,
+    email: 'stormwater.officer@jarviscivic.local',
+    badge: 'AUTHORITY',
+    dept: 'DRAINAGE_STORMWATER',
   },
   {
     label: 'Municipal Supervisor',

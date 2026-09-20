@@ -53,6 +53,7 @@ storage/
 scratch/
 *.dist-info/
 .data/
+cases_store.json
 
 # SAM Local Packaging Vendored Dependencies
 sam/src/notification_worker/bin/

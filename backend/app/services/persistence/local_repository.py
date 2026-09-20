@@ -6,6 +6,8 @@ and fast unit testing.
 """
 
 from datetime import datetime, timezone
+import json
+import logging
 import os
 import re
 import secrets
@@ -28,6 +30,8 @@ from app.services.persistence.interface import (
     CaseRepository,
     EvidenceRepository,
 )
+
+logger = logging.getLogger("jarvis.persistence.local")
 
 
 def sanitize_filename(filename: str) -> str:
@@ -123,12 +127,156 @@ def validate_evidence_file(
 
 
 class LocalCaseRepository(CaseRepository):
-    """Thread-safe in-memory case repository implementing CaseRepository."""
+    """Thread-safe in-memory case repository implementing CaseRepository with local disk persistence."""
 
-    def __init__(self):
+    def __init__(self, storage_path: Optional[str] = None):
+        self._storage_path = storage_path or os.path.join(os.path.dirname(__file__), "cases_store.json")
         self._cases: Dict[str, CivicCaseRecord] = {}
         self._case_history: Dict[str, List[CaseHistoryItem]] = {}
         self._lock = threading.Lock()
+        self._load_from_disk()
+        if not self._cases:
+            self._seed_default_cases()
+
+    def _save_to_disk(self) -> None:
+        try:
+            data = {
+                "cases": {cid: rec.model_dump(mode="json") for cid, rec in self._cases.items()},
+                "case_history": {
+                    cid: [h.model_dump(mode="json") for h in history]
+                    for cid, history in self._case_history.items()
+                },
+            }
+            tmp_path = f"{self._storage_path}.tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            try:
+                os.replace(tmp_path, self._storage_path)
+            except OSError:
+                import shutil
+                shutil.copyfile(tmp_path, self._storage_path)
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+        except Exception as err:
+            logger.error("Failed to persist case store to disk: %s", err)
+
+    def _load_from_disk(self) -> None:
+        if not os.path.exists(self._storage_path):
+            return
+        try:
+            with open(self._storage_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            cases_map = {}
+            for cid, item in data.get("cases", {}).items():
+                try:
+                    cases_map[cid] = CivicCaseRecord.model_validate(item)
+                except Exception as parse_err:
+                    logger.warning("Skipping malformed case item %s: %s", cid, parse_err)
+
+            history_map = {}
+            for cid, items in data.get("case_history", {}).items():
+                parsed_list = []
+                for h in items:
+                    try:
+                        parsed_list.append(CaseHistoryItem.model_validate(h))
+                    except Exception:
+                        pass
+                history_map[cid] = parsed_list
+
+            self._cases = cases_map
+            self._case_history = history_map
+            logger.info("Loaded %d cases from %s", len(self._cases), self._storage_path)
+        except Exception as err:
+            logger.error("Failed to load cases from disk: %s", err)
+
+    def _seed_default_cases(self) -> None:
+        now = datetime.now(timezone.utc)
+        defaults = [
+            (
+                "NS-CHN-2026-2175",
+                "citizen-01",
+                "Severe road crater and bitumen fracture after heavy rain",
+                "Anna Salai near Thousand Lights",
+                ControlledDepartment.PWD_ROADS.value,
+                CaseStatus.DOCKET_CREATED,
+                "600002",
+            ),
+            (
+                "NS-CHN-2026-14CE",
+                "citizen-01",
+                "Stormwater Drain Clogging & Silt Accumulation",
+                "Anna Salai near Thousand Lights",
+                ControlledDepartment.DRAINAGE_STORMWATER.value,
+                CaseStatus.DOCKET_CREATED,
+                "600002",
+            ),
+            (
+                "NS-CHN-2026-821F",
+                "citizen-01",
+                "Hazardous Road Crater & Bitumen Fracture",
+                "MG Road Railway Bridge Approach",
+                ControlledDepartment.PWD_ROADS.value,
+                CaseStatus.ROUTING_PREPARED,
+                "600001",
+            ),
+            (
+                "NS-CHN-2026-4B90",
+                "citizen-01",
+                "Consecutive Streetlight Cluster Blackout",
+                "5th Main Road, Sector 4",
+                ControlledDepartment.PWD_ROADS.value,
+                CaseStatus.SUBMISSION_READY,
+                "600040",
+            ),
+            (
+                "NS-CHN-2026-5E2A",
+                "citizen-01",
+                "Commercial Garbage Spillover & Silt Deposition",
+                "Velachery Bypass Market Junction",
+                ControlledDepartment.DRAINAGE_STORMWATER.value,
+                CaseStatus.UNDER_REVIEW,
+                "600042",
+            ),
+            (
+                "NS-CHN-2026-9A10",
+                "citizen-01",
+                "Potable Water Pipeline Pressure Deficit",
+                "T Nagar 3rd Cross Street",
+                ControlledDepartment.DRAINAGE_STORMWATER.value,
+                CaseStatus.DOCKET_CREATED,
+                "600017",
+            ),
+        ]
+        for cid, owner, desc, loc, dept, st, pin in defaults:
+            self._cases[cid] = CivicCaseRecord(
+                case_id=cid,
+                owner_id=owner,
+                department=dept,
+                status=st,
+                description=desc,
+                location=loc,
+                pincode=pin,
+                is_public=True,
+                resolution_notes=[],
+                evidence_uris=[],
+                created_at=now,
+                updated_at=now,
+            )
+            self._case_history[cid] = [
+                CaseHistoryItem(
+                    milestone_id=f"ms-{secrets.token_hex(6)}",
+                    status=st.value,
+                    label=st.value.replace("_", " ").title(),
+                    timestamp=now,
+                    department=dept,
+                    description=f"Seeded docket: {desc}",
+                    actor_role="CITIZEN",
+                    note="Initial Civic Docket Created",
+                )
+            ]
+        self._save_to_disk()
 
     def create_case(
         self,
@@ -173,6 +321,7 @@ class LocalCaseRepository(CaseRepository):
                     note="Initial Civic Docket Created",
                 )
             ]
+            self._save_to_disk()
             return record
 
     def get_case(self, case_id: str) -> Optional[CivicCaseRecord]:
@@ -201,6 +350,7 @@ class LocalCaseRepository(CaseRepository):
             if pincode is not None:
                 record.pincode = pincode
             record.updated_at = datetime.now(timezone.utc)
+            self._save_to_disk()
             return record
 
     def update_case_status(
@@ -246,6 +396,7 @@ class LocalCaseRepository(CaseRepository):
                     note=note,
                 )
             )
+            self._save_to_disk()
             return record
 
     def add_resolution_note(
@@ -276,6 +427,7 @@ class LocalCaseRepository(CaseRepository):
                     note=note,
                 )
             )
+            self._save_to_disk()
             return record
 
     def add_evidence_uri(self, case_id: str, uri: str) -> Optional[CivicCaseRecord]:
@@ -286,6 +438,7 @@ class LocalCaseRepository(CaseRepository):
             if uri not in record.evidence_uris:
                 record.evidence_uris.append(uri)
             record.updated_at = datetime.now(timezone.utc)
+            self._save_to_disk()
             return record
 
     def confirm_and_resolve_case(
@@ -301,6 +454,7 @@ class LocalCaseRepository(CaseRepository):
             now = datetime.now(timezone.utc)
             record.resolution_confirmed = True
             record.resolution_confirmed_at = now
+            record.confirmation_requested = False
             if feedback:
                 record.citizen_feedback = feedback
             record.status = CaseStatus.RESOLVED
@@ -320,6 +474,7 @@ class LocalCaseRepository(CaseRepository):
                     note=feedback,
                 )
             )
+            self._save_to_disk()
             return record
 
     def reject_resolution(
@@ -335,6 +490,7 @@ class LocalCaseRepository(CaseRepository):
             now = datetime.now(timezone.utc)
             record.resolution_confirmed = False
             record.resolution_rejected_at = now
+            record.confirmation_requested = False
             record.rejection_count += 1
             record.citizen_feedback = reason
             record.status = CaseStatus.UNDER_REVIEW
@@ -355,19 +511,56 @@ class LocalCaseRepository(CaseRepository):
                     note=reason,
                 )
             )
+            self._save_to_disk()
             return record
 
     def set_active_resolution_attempt(
         self,
         case_id: str,
         attempt_id: str,
+        resolution_message: Optional[str] = None,
     ) -> Optional[CivicCaseRecord]:
         with self._lock:
             record = self._cases.get(case_id)
             if not record:
                 return None
             record.active_resolution_attempt = attempt_id
+            if resolution_message is not None:
+                record.resolution_message = resolution_message
+            record.confirmation_requested = False
             record.updated_at = datetime.now(timezone.utc)
+            self._save_to_disk()
+            return record
+
+    def request_citizen_confirmation(
+        self,
+        case_id: str,
+        actor_label: Optional[str] = None,
+    ) -> Optional[CivicCaseRecord]:
+        with self._lock:
+            record = self._cases.get(case_id)
+            if not record:
+                return None
+            now = datetime.now(timezone.utc)
+            record.confirmation_requested = True
+            record.confirmation_requested_at = now
+            record.updated_at = now
+
+            if case_id not in self._case_history:
+                self._case_history[case_id] = []
+            self._case_history[case_id].append(
+                CaseHistoryItem(
+                    milestone_id=f"ms-{secrets.token_hex(6)}",
+                    status=CaseStatus.UNDER_REVIEW.value,
+                    label="Citizen Confirmation Requested",
+                    timestamp=now,
+                    department=record.department,
+                    description="Authority requested citizen confirmation on submitted resolution evidence",
+                    actor_role=actor_label or "AUTHORITY_OFFICER",
+                    note=record.resolution_message,
+                )
+            )
+            self._save_to_disk()
             return record
 
     def list_all_cases(self) -> List[CivicCaseRecord]:
@@ -378,6 +571,11 @@ class LocalCaseRepository(CaseRepository):
         with self._lock:
             self._cases.clear()
             self._case_history.clear()
+            if os.path.exists(self._storage_path):
+                try:
+                    os.remove(self._storage_path)
+                except Exception:
+                    pass
 
 
 class LocalAuditRepository(AuditRepository):
