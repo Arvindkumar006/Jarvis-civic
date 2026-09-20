@@ -2,8 +2,8 @@
 ## Speak. Report. Resolve.
 
 **AI-Assisted Civic Decision-Support & Structured Grievance Routing Engine**  
-*AWS First Commit — WeMakeDevs × AWS Hackathon Submission*  
-**Primary Target:** Build It | **Secondary Consideration:** Best UI
+
+
 
 [![AWS Strands](https://img.shields.io/badge/AWS_Strands-Agents_SDK_Runtime-FF9900?style=flat-square&logo=amazonaws&logoColor=white)](https://github.com/awslabs/strands-agents)
 [![AWS Cedar](https://img.shields.io/badge/AWS_Cedar-Policy_Engine_PEP-4A154B?style=flat-square&logo=amazon&logoColor=white)](https://www.cedarpolicy.com/)
@@ -359,19 +359,6 @@ Visit `http://localhost:5173` in your browser.
 
 ---
 
-## 13. 3-Minute Hackathon Demo Flow
-
-| Timestamp | Screen / Action | What the Judge Sees | System Under the Hood |
-| :--- | :--- | :--- | :--- |
-| **0:00 - 0:20** | **The Civic Challenge** | Landing Hero: *"Speak. Report. Resolve."* Prompt buttons demonstrating broken roads and flooded drains. | Static glassmorphic React UI; role cards at bottom. |
-| **0:20 - 0:45** | **Citizen Conversation** | Citizen types: *"Massive waterlogging near Anna Nagar 2nd Avenue, water entered shops."* | Strands Agents SDK parses intent: `DRAINAGE_STORMWATER`, detects missing landmark, and prompts. |
-| **0:45 - 1:05** | **Docket Generation** | Extraction HUD lights up green: Landmark provided, Location pinned on Leaflet Map. Click **Create Civic Action Docket**. | Authoritative CaseStore generates `NS-CHN-2026-XXXX`. Audit event written to append-only log. |
-| **1:05 - 1:25** | **Evidence & Vision AI** | Citizen uploads waterlogging photo. Click **Upload & Verify**. | SHA-256 computed. Ollama `moondream` analyzes image: `VERIFIED - Standing flood water confirmed`. |
-| **1:25 - 1:45** | **Cedar Authorization** | Switch to Authority Workspace. Login as **Drainage Officer**. Case appears in department triage. Attempt to access Roads case: **Blocked (HTTP 403)**. | Cedar PEP evaluates `principal in DrainageOfficer` against `resource.department`. Isolation verified. |
-| **1:45 - 2:10** | **Resolution Submission** | Officer moves case to `UNDER_REVIEW`, uploads post-repair photo showing cleared drain, types message, clicks **Request Citizen Confirmation**. | Validation enforces resolution proof before confirmation gate opens. Notification dispatched via SAM worker. |
-| **2:10 - 2:40** | **Citizen Final Gate** | Citizen logs in. Alert appears: *"Resolution Ready for Review"*. Citizen inspects before/after photos and clicks **Accept Resolution**. | Status transitions to `RESOLVED`. Authority attempt to unilaterally close without citizen is blocked. |
-| **2:40 - 3:00** | **Cloud Parity & Closing** | OpenSearch search indexing and SAM template validation demonstrated. | Show 406/406 backend tests and 67/67 frontend tests passing green. |
-
 ---
 
 ## 14. Testing & Verification Matrix
@@ -482,4 +469,4 @@ flowchart LR
 ## 18. License & Attribution
 
 JARVIS Civic is licensed under the **Apache License 2.0**.  
-Built for the **AWS First Commit — WeMakeDevs × AWS Hackathon 2026**.
+
